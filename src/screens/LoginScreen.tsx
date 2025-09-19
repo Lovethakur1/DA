@@ -1,5 +1,6 @@
 import { useAuth } from '@/src/auth/AuthContext'
 import Button from '@/src/components/Button'
+import KeyboardAwareView from '@/src/components/KeyboardAwareView'
 import TextInputField from '@/src/components/TextInputField'
 import { useNavigation } from '@react-navigation/native'
 import React, { useEffect, useState } from 'react'
@@ -55,13 +56,15 @@ const LoginScreen = () => {
   }
 
   return (
-    <View className="flex-1 bg-white px-6 justify-center">
-      <Text className="text-3xl font-bold mb-6" style={{ color: '#289294' }}>Sign In</Text>
-      {errors.server ? <Text className="text-sm text-red-500 mb-3">{errors.server}</Text> : null}
-      <TextInputField label="Email" value={email} onChangeText={setEmail} placeholder="you@example.com" error={errors.email} keyboardType="email-address" />
-      <TextInputField label="Password" value={password} onChangeText={setPassword} placeholder="Password" secureTextEntry error={errors.password} />
-      <Button title="Request OTP" onPress={handleSubmit} loading={loading} />
-    </View>
+    <KeyboardAwareView>
+      <View className="flex-1 bg-white px-6 justify-center">
+        <Text className="text-3xl font-bold mb-6" style={{ color: '#289294' }}>Sign In</Text>
+        {errors.server ? <Text className="text-sm text-red-500 mb-3">{errors.server}</Text> : null}
+        <TextInputField label="Email" value={email} onChangeText={setEmail} placeholder="you@example.com" error={errors.email} keyboardType="email-address" />
+        <TextInputField label="Password" value={password} onChangeText={setPassword} placeholder="Password" secureTextEntry error={errors.password} />
+        <Button title="Request OTP" onPress={handleSubmit} loading={loading} />
+      </View>
+    </KeyboardAwareView>
   )
 }
 

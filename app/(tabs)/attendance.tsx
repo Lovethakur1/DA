@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react'
 import {
   Alert,
   FlatList,
+  ScrollView,
   Text,
   TouchableOpacity,
   View
@@ -40,6 +41,7 @@ const AttendancePage = () => {
     breaks: []
   })
   const [permissionsGranted, setPermissionsGranted] = useState<boolean | null>(null)
+  const [submittingCheckout, setSubmittingCheckout] = useState(false)
 
   // Track current break start for elapsed calculation
   const [currentBreakStart, setCurrentBreakStart] = useState<Date | null>(null)
@@ -175,7 +177,7 @@ const AttendancePage = () => {
 
       // API call (no photo)
       try {
-                try { console.log('CHECKIN_PAYLOAD:', JSON.stringify({ checkin_latitude: location.coords.latitude, checkin_longitude: location.coords.longitude }, null, 2)) } catch { console.log('CHECKIN_PAYLOAD:', { checkin_latitude: location.coords.latitude, checkin_longitude: location.coords.longitude }) }
+                try { console.log('CHECKIN_PAYLOAD:', JSON.stringify({ latitude: location.coords.latitude, longitude: location.coords.longitude }, null, 2)) } catch { console.log('CHECKIN_PAYLOAD:', { latitude: location.coords.latitude, longitude: location.coords.longitude }) }
                 const { checkIn } = await import('@/src/api/attendance')
                 await checkIn({ latitude: location.coords.latitude, longitude: location.coords.longitude, photoUri: photo })
         Alert.alert('Success', 'You have successfully checked in!')
@@ -220,15 +222,33 @@ const AttendancePage = () => {
       setIsCheckedIn(false)
       setIsOnBreak(false)
 
-      // API call (no photo)
+      // API call (photo uploaded as multipart/form-data)
       try {
-                try { console.log('CHECKOUT_PAYLOAD:', JSON.stringify({ checkout_latitude: location.coords.latitude, checkout_longitude: location.coords.longitude }, null, 2)) } catch { console.log('CHECKOUT_PAYLOAD:', { checkout_latitude: location.coords.latitude, checkout_longitude: location.coords.longitude }) }
-                const { checkOut } = await import('@/src/api/attendance')
-                await checkOut({ latitude: location.coords.latitude, longitude: location.coords.longitude, photoUri: photo })
-        Alert.alert('Success', 'You have successfully checked out!')
+  try { console.log('CHECKOUT_PAYLOAD:', JSON.stringify({ latitude: location.coords.latitude, longitude: location.coords.longitude }, null, 2)) } catch { console.log('CHECKOUT_PAYLOAD:', { latitude: location.coords.latitude, longitude: location.coords.longitude }) }
+        const { checkOut } = await import('@/src/api/attendance')
+        setSubmittingCheckout(true)
+        const data = await checkOut({ latitude: location.coords.latitude, longitude: location.coords.longitude, photoUri: photo })
+        // Expected response contains checkout_time, total_hours, message, etc.
+        if (data && data.success) {
+          const checkoutTime = data.checkout_time ? new Date(data.checkout_time) : new Date()
+          setAttendanceRecord(prev => ({
+            ...prev,
+            checkOutTime: checkoutTime,
+            checkOutLocation: location.coords,
+            checkOutPhoto: photo
+          }))
+          setIsCheckedIn(false)
+          setIsOnBreak(false)
+          Alert.alert('Success', data.message || 'You have successfully checked out!')
+        } else {
+          console.warn('Unexpected checkout response', data)
+          Alert.alert('Warning', data?.message || 'Checked out locally but failed to sync to server')
+        }
       } catch (apiError) {
         console.error('API check-out error', apiError)
         Alert.alert('Warning', 'Checked out locally but failed to sync to server')
+      } finally {
+        setSubmittingCheckout(false)
       }
 
     } catch (error) {
@@ -288,7 +308,10 @@ const AttendancePage = () => {
           })}
         </Text>
       </View>
-
+ <ScrollView
+      contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 32 }}
+      showsVerticalScrollIndicator={false}
+    >
       <View className="flex-1 px-6 py-8">
         {/* Permission Banner */}
         {permissionsGranted === false && (
@@ -337,6 +360,7 @@ const AttendancePage = () => {
       className={`rounded-2xl py-4 px-6 items-center shadow-lg ${isCheckedIn ? 'bg-red-400' : 'bg-[#289294]'}`}
       onPress={
         isCheckedIn ? handleCheckOut : handleCheckIn}
+      disabled={submittingCheckout}
     >
       <Text className="text-white text-lg font-semibold">
         {isCheckedIn ? '📤 Check Out' : '📥 Check In'}
@@ -371,6 +395,7 @@ const AttendancePage = () => {
         <TouchableOpacity
           className="flex-1 ml-2 rounded-2xl py-4 px-6 items-center shadow-lg bg-red-400"
           onPress={handleCheckOut}
+          disabled={submittingCheckout}
         >
           <Text className="text-white text-lg font-semibold">📤 Check Out</Text>
         </TouchableOpacity>
@@ -429,7 +454,7 @@ const AttendancePage = () => {
             • Check actions are disabled after check-out for the day
           </Text>
         </View>
-      </View>
+      </View></ScrollView>
     </View>
   )
 }

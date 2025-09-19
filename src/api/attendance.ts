@@ -19,11 +19,12 @@ const makeFileForFormData = (uri: string, name = 'photo.jpg', type = 'image/jpeg
 
 export const checkIn = async ({ latitude, longitude, photoUri }: { latitude: number; longitude: number; photoUri?: string }) => {
   const formData = new FormData()
-  formData.append('checkin_latitude', String(latitude))
-  formData.append('checkin_longitude', String(longitude))
+  // Server expects keys: latitude, longitude, image
+  formData.append('latitude', String(latitude))
+  formData.append('longitude', String(longitude))
   if (photoUri) {
     // Cast to any to satisfy React Native FormData typing in TypeScript
-    formData.append('checkin_photo', makeFileForFormData(photoUri) as any)
+    formData.append('image', makeFileForFormData(photoUri) as any)
   }
 
   const res = await api.post('/api/checkin/', formData, {
@@ -36,14 +37,15 @@ export const checkIn = async ({ latitude, longitude, photoUri }: { latitude: num
 
 export const checkOut = async ({ latitude, longitude, photoUri }: { latitude: number; longitude: number; photoUri?: string }) => {
   const formData = new FormData()
-  formData.append('checkout_latitude', String(latitude))
-  formData.append('checkout_longitude', String(longitude))
+  // Server expects keys: latitude, longitude, image
+  formData.append('latitude', String(latitude))
+  formData.append('longitude', String(longitude))
   if (photoUri) {
     // Cast to any to satisfy React Native FormData typing in TypeScript
-    formData.append('checkout_photo', makeFileForFormData(photoUri) as any)
+    formData.append('image', makeFileForFormData(photoUri) as any)
   }
 
-  // Backend expects POST /api/checkout/ (updated API)
+  // Backend expects POST /api/checkout/
   const res = await api.post('/api/checkout/', formData, {
     headers: {
       'Content-Type': 'multipart/form-data'

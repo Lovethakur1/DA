@@ -1,10 +1,11 @@
+import { useAuth } from '@/src/auth/AuthContext'
 import Button from '@/src/components/Button'
+import KeyboardAwareView from '@/src/components/KeyboardAwareView'
 import TextInputField from '@/src/components/TextInputField'
 import { useNavigation, useRoute } from '@react-navigation/native'
 import React, { useEffect, useState } from 'react'
 import { Text, View } from 'react-native'
 import { z } from 'zod'
-import { useAuth } from '@/src/auth/AuthContext'
 
 const schema = z.object({
   otp: z.string().length(6, 'OTP must be 6 digits')
@@ -48,13 +49,15 @@ const OtpScreen = () => {
   }
 
   return (
-    <View className="flex-1 bg-white px-6 justify-center">
-      <Text className="text-2xl font-semibold mb-4" style={{ color: '#289294' }}>Enter OTP</Text>
-      <Text className="text-sm text-gray-600 mb-6">OTP sent to: {email}</Text>
-      {errors.server ? <Text className="text-sm text-red-500 mb-3">{errors.server}</Text> : null}
-      <TextInputField label="OTP" value={otp} onChangeText={setOtp} placeholder="Enter 6-digit code" keyboardType="numeric" error={errors.otp} />
-      <Button title="Verify OTP" onPress={handleSubmit} loading={loading} />
-    </View>
+    <KeyboardAwareView>
+      <View className="flex-1 bg-white px-6 justify-center">
+        <Text className="text-2xl font-semibold mb-4" style={{ color: '#289294' }}>Enter OTP</Text>
+        <Text className="text-sm text-gray-600 mb-6">OTP sent to: {email}</Text>
+        {errors.server ? <Text className="text-sm text-red-500 mb-3">{errors.server}</Text> : null}
+        <TextInputField label="OTP" value={otp} onChangeText={setOtp} placeholder="Enter 6-digit code" keyboardType="numeric" error={errors.otp} />
+        <Button title="Verify OTP" onPress={handleSubmit} loading={loading} />
+      </View>
+    </KeyboardAwareView>
   )
 }
 

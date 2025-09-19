@@ -1,11 +1,10 @@
 import { useAuth } from '@/src/auth/AuthContext'
+import KeyboardAwareView from '@/src/components/KeyboardAwareView'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import React, { useRef, useState } from 'react'
 import {
   Alert,
   Image,
-  KeyboardAvoidingView,
-  Platform,
   Text,
   TextInput,
   TouchableOpacity,
@@ -68,11 +67,8 @@ const OTP = () => {
   }
 
   return (
-    <KeyboardAvoidingView
-      className="flex-1 bg-white"
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <View className="flex-1 px-6 justify-center">
+    <KeyboardAwareView>
+      <View className="flex-1 bg-white px-6 justify-center">
         {/* Logo Section */}
         <View className="items-center mb-12">
           <Image
@@ -132,7 +128,7 @@ const OTP = () => {
           </TouchableOpacity>
         </View>
       </View>
-    </KeyboardAvoidingView>
+    </KeyboardAwareView>
   )
 }
 

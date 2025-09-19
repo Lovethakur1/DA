@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react'
 import {
-    ActivityIndicator,
-    FlatList,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  FlatList,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native'
 
 interface AttendanceDay {
