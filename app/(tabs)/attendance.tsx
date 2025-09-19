@@ -329,30 +329,56 @@ const AttendancePage = () => {
           </View>
         </View>
 
-        {/* Action Buttons */}
-        {!isCheckedOutToday() && (
-          <>
-            <TouchableOpacity
-              className={`rounded-2xl py-4 px-6 items-center shadow-lg ${isCheckedIn ? 'bg-red-500' : 'bg-[#289294]'}`}
-              onPress={isCheckedIn ? handleCheckOut : handleCheckIn}
-            >
-              <Text className="text-white text-lg font-semibold">{isCheckedIn ? '📤 Check Out' : '📥 Check In'}</Text>
-              <Text className="text-white text-sm mt-1 opacity-90">{isCheckedIn ? 'End your work day' : 'Start your work day'}</Text>
-            </TouchableOpacity>
+       {/* Action Buttons */}
+{!isCheckedOutToday() && (
+  <>
+    {/* Main Check In / Check Out button */}
+    {isCheckedIn ? "" :  <TouchableOpacity
+      className={`rounded-2xl py-4 px-6 items-center shadow-lg ${isCheckedIn ? 'bg-red-400' : 'bg-[#289294]'}`}
+      onPress={
+        isCheckedIn ? handleCheckOut : handleCheckIn}
+    >
+      <Text className="text-white text-lg font-semibold">
+        {isCheckedIn ? '📤 Check Out' : '📥 Check In'}
+      </Text>
+      <Text className="text-white text-sm mt-1 opacity-90">
+        {isCheckedIn ? 'End your work day' : 'Start your work day'}
+      </Text>
+    </TouchableOpacity> }
+   
 
-            {isCheckedIn && !isOnBreak && (
-              <TouchableOpacity className="mt-4 items-center" onPress={handleBreakIn}>
-                <Text className="text-sm text-gray-600">Start Break</Text>
-              </TouchableOpacity>
-            )}
-
-            {isCheckedIn && isOnBreak && (
-              <TouchableOpacity className="mt-4 items-center" onPress={handleBreakOff}>
-                <Text className="text-sm text-gray-600">End Break</Text>
-              </TouchableOpacity>
-            )}
-          </>
+    {/* When checked in, show break buttons */}
+    {isCheckedIn && 
+    (
+      <View className="flex-row mt-4 w-full justify-between">
+        {!isOnBreak ? (
+          <TouchableOpacity
+            className="flex-1 mr-2 rounded-2xl py-4 px-6 items-center shadow-lg bg-[#289294]"
+            onPress={handleBreakIn}
+          >
+            <Text className="text-white text-lg font-semibold">☕ Start Break</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            className="flex-1 mr-2 rounded-2xl py-4 px-6 items-center shadow-lg bg-red-500"
+            onPress={handleBreakOff}
+          >
+            <Text className="text-white text-lg font-semibold">⏱ End Break</Text>
+          </TouchableOpacity>
         )}
+
+        {/* Keep checkout button visible in same row if needed */}
+        <TouchableOpacity
+          className="flex-1 ml-2 rounded-2xl py-4 px-6 items-center shadow-lg bg-red-400"
+          onPress={handleCheckOut}
+        >
+          <Text className="text-white text-lg font-semibold">📤 Check Out</Text>
+        </TouchableOpacity>
+      </View>
+    )}
+  </>
+)}
+
 
         {/* Breaks table */}
         {attendanceRecord.breaks.length > 0 && (

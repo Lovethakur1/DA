@@ -1,10 +1,10 @@
-import { useAuth } from '@/src/auth/AuthContext'
 import Button from '@/src/components/Button'
 import TextInputField from '@/src/components/TextInputField'
 import { useNavigation, useRoute } from '@react-navigation/native'
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Text, View } from 'react-native'
 import { z } from 'zod'
+import { useAuth } from '@/src/auth/AuthContext'
 
 const schema = z.object({
   otp: z.string().length(6, 'OTP must be 6 digits')
@@ -20,11 +20,18 @@ const OtpScreen = () => {
   const auth = useAuth()
   const navigation = useNavigation()
 
+  useEffect(() => {
+    if (!auth.loading && auth.isAuthenticated) {
+      // @ts-ignore
+      navigation.reset({ index: 0, routes: [{ name: 'Profile' }] })
+    }
+  }, [auth.loading, auth.isAuthenticated, navigation])
+
   const handleSubmit = async () => {
     setErrors({})
     const parsed = schema.safeParse({ otp })
     if (!parsed.success) {
-      setErrors({ otp: parsed.error.errors[0].message })
+      setErrors({ otp: parsed.error.issues[0].message })
       return
     }
 

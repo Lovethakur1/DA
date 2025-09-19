@@ -2,7 +2,7 @@ import { useAuth } from '@/src/auth/AuthContext'
 import Button from '@/src/components/Button'
 import TextInputField from '@/src/components/TextInputField'
 import { useNavigation } from '@react-navigation/native'
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Text, View } from 'react-native'
 import { z } from 'zod'
 
@@ -19,14 +19,23 @@ const LoginScreen = () => {
   const navigation = useNavigation()
   const auth = useAuth()
 
+  useEffect(() => {
+    // if already authenticated, send to profile
+    if (!auth.loading && auth.isAuthenticated) {
+      // @ts-ignore
+      navigation.reset({ index: 0, routes: [{ name: 'Profile' }] })
+    }
+  }, [auth.loading, auth.isAuthenticated, navigation])
+
   const handleSubmit = async () => {
     setErrors({})
     const parsed = schema.safeParse({ email, password })
     if (!parsed.success) {
       const formErrors: any = {}
-      parsed.error.errors.forEach(e => {
-        if (e.path[0] === 'email') formErrors.email = e.message
-        if (e.path[0] === 'password') formErrors.password = e.message
+      // map zod errors to form fields
+      ;(parsed.error.issues as any[]).forEach(e => {
+        if (e.path && e.path[0] === 'email') formErrors.email = e.message
+        if (e.path && e.path[0] === 'password') formErrors.password = e.message
       })
       setErrors(formErrors)
       return
@@ -35,9 +44,9 @@ const LoginScreen = () => {
     setLoading(true)
     try {
       await auth.loginWithOtp(email, password)
-      // navigate to OTP screen with email param
+      // navigate to OTP screen with email param and replace so user can't go back to login
       // @ts-ignore
-      navigation.navigate('Otp', { email })
+      navigation.reset({ index: 0, routes: [{ name: 'Otp', params: { email } }] })
     } catch (error: any) {
       setErrors({ server: error?.message || 'Network error' })
     } finally {

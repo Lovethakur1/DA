@@ -84,7 +84,7 @@ const OTP = () => {
             Verify OTP
           </Text>
           <Text className="text-base text-gray-600 text-center leading-6 px-5">
-            We've sent a 6-digit code to your registered mobile number
+            We&apos;ve sent a 6-digit code to your registered mobile number
           </Text>
         </View>
 
@@ -120,7 +120,7 @@ const OTP = () => {
 
           <TouchableOpacity className="items-center" onPress={handleResendOtp}>
             <Text className="text-base font-medium" style={{ color: '#289294' }}>
-              Didn't receive code? Resend
+              Didn&apos;t receive code? Resend
             </Text>
           </TouchableOpacity>
         </View>
