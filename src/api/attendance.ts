@@ -35,6 +35,39 @@ export const checkIn = async ({ latitude, longitude, photoUri }: { latitude: num
   return res.data
 }
 
+export const breakIn = async () => {
+  try {
+    const res = await api.post('/api/break-in/', {})
+    return res.data
+  } catch (error: any) {
+    if (error?.response?.data) throw error.response.data
+    throw error
+  }
+}
+
+export const breakOut = async () => {
+  try {
+    const res = await api.put('/api/break-out/', {})
+    return res.data
+  } catch (error: any) {
+    if (error?.response?.data) throw error.response.data
+    throw error
+  }
+}
+
+export const breakHistory = async (params: { limit?: number; date?: string } = {}) => {
+  try {
+    const query: any = {}
+    if (params.limit) query.limit = params.limit
+    if (params.date) query.date = params.date
+    const res = await api.get('/api/break-history/', { params: query })
+    return res.data
+  } catch (error: any) {
+    if (error?.response?.data) throw error.response.data
+    throw error
+  }
+}
+
 export const checkOut = async ({ latitude, longitude, photoUri }: { latitude: number; longitude: number; photoUri?: string }) => {
   const formData = new FormData()
   // Server expects keys: latitude, longitude, image

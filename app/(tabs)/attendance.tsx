@@ -3,7 +3,6 @@ import * as Location from 'expo-location'
 import React, { useEffect, useState } from 'react'
 import {
   Alert,
-  FlatList,
   ScrollView,
   Text,
   TouchableOpacity,
@@ -265,6 +264,20 @@ const AttendancePage = () => {
     setIsOnBreak(true)
     setBreakElapsed(0)
     setAttendanceRecord(prev => ({ ...prev, breaks: [...prev.breaks, { start, end: null }] }))
+    // call API to register break start
+    try {
+      const { breakIn } = await import('@/src/api/attendance')
+      const res = await breakIn()
+      if (res && res.success) {
+        // optionally update local record with server response if available
+        // e.g., server may return break_record with timestamps; we keep local optimistic state
+      } else {
+        console.warn('break-in API unexpected response', res)
+      }
+    } catch (apiError) {
+      console.error('API break-in error', apiError)
+      Alert.alert('Warning', 'Started break locally but failed to notify server')
+    }
   }
 
   const handleBreakOff = async () => {
@@ -283,6 +296,19 @@ const AttendancePage = () => {
       return { ...prev, breaks }
     })
     setBreakElapsed(0)
+    // call API to register break end
+    try {
+      const { breakOut } = await import('@/src/api/attendance')
+      const res = await breakOut()
+      if (res && res.success) {
+        // server provided duration in res.duration or in break_record — we ignore for now
+      } else {
+        console.warn('break-out API unexpected response', res)
+      }
+    } catch (apiError) {
+      console.error('API break-out error', apiError)
+      Alert.alert('Warning', 'Ended break locally but failed to notify server')
+    }
   }
 
   const isCheckedOutToday = () => {
@@ -405,7 +431,7 @@ const AttendancePage = () => {
 )}
 
 
-        {/* Breaks table */}
+        {/* Breaks table
         {attendanceRecord.breaks.length > 0 && (
           <View className="mt-6 bg-gray-50 rounded-xl p-3">
             <Text className="font-semibold mb-2">Breaks Today</Text>
@@ -426,7 +452,7 @@ const AttendancePage = () => {
               )}
             />
           </View>
-        )}
+        )} */}
 
         {/* Day summary after check-out */}
         {attendanceRecord.checkOutTime && (
