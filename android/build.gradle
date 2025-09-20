@@ -25,11 +25,11 @@ apply plugin: "com.facebook.react.rootproject"
 
 // Ensure all Kotlin compile tasks target JVM 17 to match the Java toolchain used by EAS
 subprojects {
-  afterEvaluate { project ->
-    project.tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
-      kotlinOptions {
-        jvmTarget = "17"
-      }
+  // Configure Kotlin compile tasks in all subprojects to use JVM target 17.
+  // Avoid using afterEvaluate to prevent "project is already evaluated" errors on some Gradle versions.
+  tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+    kotlinOptions {
+      jvmTarget = "17"
     }
   }
 }
