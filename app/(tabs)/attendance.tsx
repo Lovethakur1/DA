@@ -127,7 +127,7 @@ const AttendancePage = () => {
   const takePhoto = async () => {
     try {
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: 'images',
         allowsEditing: false,
         quality: 0.7,
       })
@@ -174,12 +174,36 @@ const AttendancePage = () => {
       setIsCheckedIn(true)
       setElapsedTime(0)
 
-      // API call (no photo)
+      // API call with photo
       try {
-                try { console.log('CHECKIN_PAYLOAD:', JSON.stringify({ latitude: location.coords.latitude, longitude: location.coords.longitude }, null, 2)) } catch { console.log('CHECKIN_PAYLOAD:', { latitude: location.coords.latitude, longitude: location.coords.longitude }) }
-                const { checkIn } = await import('@/src/api/attendance')
-                await checkIn({ latitude: location.coords.latitude, longitude: location.coords.longitude, photoUri: photo })
-        Alert.alert('Success', 'You have successfully checked in!')
+        try { console.log('CHECKIN_PAYLOAD:', JSON.stringify({ latitude: location.coords.latitude, longitude: location.coords.longitude }, null, 2)) } catch { console.log('CHECKIN_PAYLOAD:', { latitude: location.coords.latitude, longitude: location.coords.longitude }) }
+        const { checkIn } = await import('@/src/api/attendance')
+        const data = await checkIn({ latitude: location.coords.latitude, longitude: location.coords.longitude, photoUri: photo })
+        
+        console.log('Full checkin API response:', data)
+        
+        // Improved response validation - check for multiple possible success indicators
+        const isSuccessful = data && (
+          data.success === true ||                    // Explicit success flag
+          data.status === 'success' ||              // Status field
+          data.checkin_time ||                      // Has checkin time
+          data.checkin_latitude ||                  // Has checkin coordinates
+          data.message ||                          // Has message (likely success)
+          (typeof data === 'object' && Object.keys(data).length > 0) // Non-empty response object
+        )
+        
+        if (isSuccessful) {
+          console.log('✅ Checkin validated as successful')
+          // Extract message from various possible response formats
+          const successMessage = data.message || 
+                                data.msg || 
+                                data.detail || 
+                                'You have successfully checked in!'
+          Alert.alert('Success', successMessage)
+        } else {
+          console.warn('Checkin response validation failed:', data)
+          Alert.alert('Warning', 'Checked in locally but server response was unexpected')
+        }
       } catch (apiError) {
         console.error('API check-in error', apiError)
         Alert.alert('Warning', 'Checked in locally but failed to sync to server')
@@ -223,12 +247,25 @@ const AttendancePage = () => {
 
       // API call (photo uploaded as multipart/form-data)
       try {
-  try { console.log('CHECKOUT_PAYLOAD:', JSON.stringify({ latitude: location.coords.latitude, longitude: location.coords.longitude }, null, 2)) } catch { console.log('CHECKOUT_PAYLOAD:', { latitude: location.coords.latitude, longitude: location.coords.longitude }) }
+        try { console.log('CHECKOUT_PAYLOAD:', JSON.stringify({ latitude: location.coords.latitude, longitude: location.coords.longitude }, null, 2)) } catch { console.log('CHECKOUT_PAYLOAD:', { latitude: location.coords.latitude, longitude: location.coords.longitude }) }
         const { checkOut } = await import('@/src/api/attendance')
         setSubmittingCheckout(true)
         const data = await checkOut({ latitude: location.coords.latitude, longitude: location.coords.longitude, photoUri: photo })
-        // Expected response contains checkout_time, total_hours, message, etc.
-        if (data && data.success) {
+        
+        console.log('Full checkout API response:', data)
+        
+        // Improved response validation - check for multiple possible success indicators
+        const isSuccessful = data && (
+          data.success === true ||                    // Explicit success flag
+          data.status === 'success' ||              // Status field
+          data.checkout_time ||                     // Has checkout time
+          data.checkout_latitude ||                 // Has checkout coordinates
+          data.message ||                          // Has message (likely success)
+          (typeof data === 'object' && Object.keys(data).length > 0) // Non-empty response object
+        )
+        
+        if (isSuccessful) {
+          console.log('✅ Checkout validated as successful')
           const checkoutTime = data.checkout_time ? new Date(data.checkout_time) : new Date()
           setAttendanceRecord(prev => ({
             ...prev,
@@ -238,10 +275,17 @@ const AttendancePage = () => {
           }))
           setIsCheckedIn(false)
           setIsOnBreak(false)
-          Alert.alert('Success', data.message || 'You have successfully checked out!')
+          
+          // Extract message from various possible response formats
+          const successMessage = data.message || 
+                                data.msg || 
+                                data.detail || 
+                                'You have successfully checked out!'
+          
+          Alert.alert('Success', successMessage)
         } else {
-          console.warn('Unexpected checkout response', data)
-          Alert.alert('Warning', data?.message || 'Checked out locally but failed to sync to server')
+          console.warn('Checkout response validation failed:', data)
+          Alert.alert('Warning', 'Checked out locally but server response was unexpected')
         }
       } catch (apiError) {
         console.error('API check-out error', apiError)

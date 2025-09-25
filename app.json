@@ -4,24 +4,29 @@
     "slug": "DTR",
     "version": "1.0.0",
     "orientation": "portrait",
-  "icon": "./assets/images/logo.png",
-  "scheme": "dtr",
+    "icon": "./assets/images/icon.png",
+    "scheme": "dtr",
     "userInterfaceStyle": "automatic",
-  "newArchEnabled": false,
     "ios": {
       "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/logo.png"
+        "foregroundImage": "./assets/images/icon.png"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.lovedev444.DTR"
+      "package": "com.lovedev444.DTR",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "INTERNET",
+        "ACCESS_NETWORK_STATE"
+      ]
     },
     "web": {
       "bundler": "metro",
       "output": "static",
-  "favicon": "./assets/images/logo.png"
+      "favicon": "./assets/images/icon.png"
     },
     "plugins": [
       "expo-router",
@@ -38,11 +43,18 @@
         "expo-build-properties",
         {
           "android": {
-            "compileSdkVersion": 33,
-            "targetSdkVersion": 33
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35
           }
         }
-      ]
+      ],
+      [
+        "expo-location",
+        {
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ],
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true
@@ -50,8 +62,10 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "fb8c3e6e-e19e-4c4f-a9e8-ac22931ccf6b"
-      }
+        "projectId": "16938fc2-128c-413c-b91d-46faaf3ca846"
+      },
+      "apiBaseUrl": "$API_BASE_URL",
+      "apiTimeout": "$API_TIMEOUT"
     }
   }
 }

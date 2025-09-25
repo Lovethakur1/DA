@@ -41,6 +41,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const res: VerifyLoginResponse = await verifyLogin(email, otp)
       if (res.success) {
+        // Store the JWT token and user data
         setAccessToken(res.access_token)
         setRefreshToken(res.refresh_token)
         setUser(res.user)
@@ -50,6 +51,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await setItem('auth.refreshToken', res.refresh_token)
         await setItem('auth.user', JSON.stringify(res.user))
         await setItem('auth.createdAt', createdAt)
+        
+        console.log('User authenticated successfully:', res.user)
       } else {
         throw new Error(res.message || 'Verification failed')
       }

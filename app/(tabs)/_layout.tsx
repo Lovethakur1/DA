@@ -1,5 +1,6 @@
-﻿import { useAuth } from "@/src/auth/AuthContext";
+import { useAuth } from "@/src/auth/AuthContext";
 import HeaderMenu from "@/src/components/HeaderMenu";
+import ProtectedRoute from "@/src/components/ProtectedRoute";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { Tabs, useRouter } from "expo-router";
 import React, { useMemo } from "react";
@@ -15,6 +16,17 @@ const Header = () => {
 
   const handleProfile = () => {
     router.push("/profile");
+  };
+
+  const handleLogout = async () => {
+    try {
+      await auth.logout();
+      router.replace("/login");
+    } catch (error) {
+      console.error("Logout error:", error);
+      // Still redirect to login even if logout fails
+      router.replace("/login");
+    }
   };
 
   // Optional: fallback initials avatar if you want a quick profile jump
@@ -61,7 +73,7 @@ const Header = () => {
           </TouchableOpacity>
 
           {/* Existing menu with logout + profile */}
-          <HeaderMenu onLogout={auth.logout} onProfile={handleProfile} />
+          <HeaderMenu onLogout={handleLogout} onProfile={handleProfile} />
         </View>
       </View>
     </View>
@@ -91,7 +103,7 @@ const TabIcon = ({
 
 const TabsLayout = () => {
   return (
-    <>
+    <ProtectedRoute>
       <Header />
       <Tabs
         initialRouteName="attendance"
@@ -159,7 +171,7 @@ const TabsLayout = () => {
           }}
         />
       </Tabs>
-    </>
+    </ProtectedRoute>
   );
 };
 
