@@ -7,11 +7,21 @@ import {
   View
 } from 'react-native'
 
+interface BreakEntry {
+  start: string
+  end: string
+  duration: string
+}
+
 interface AttendanceDay {
   date: string
   checkIn: string | null
   checkOut: string | null
   workingHours: string
+  totalBreakTime: string
+  netWorkingHours: string // workingHours - totalBreakTime
+  breakCount: number
+  breaks: BreakEntry[]
   status: 'Present' | 'Absent' | 'Half Day' | 'Late'
 }
 
@@ -19,6 +29,7 @@ const HistoryPage = () => {
   const [selectedView, setSelectedView] = useState<'weekly' | 'monthly'>('weekly')
   const [attendanceData, setAttendanceData] = useState<AttendanceDay[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
 
   // Dummy data generator
   useEffect(() => {
@@ -58,6 +69,10 @@ const HistoryPage = () => {
         let checkOut = null
         let status: AttendanceDay['status'] = 'Absent'
         let workingHours = '00:00'
+        let breaks: BreakEntry[] = []
+        let totalBreakTime = '00:00'
+        let netWorkingHours = '00:00'
+        let breakCount = 0
         
         if (isPresent) {
           const baseCheckIn = isLate ? 9 + Math.random() * 2 : 9 + Math.random() * 0.5 // 9-11 AM if late, 9-9:30 if on time
@@ -68,6 +83,37 @@ const HistoryPage = () => {
           
           const workHours = baseCheckOut - baseCheckIn
           workingHours = `${Math.floor(workHours)}:${String(Math.floor((workHours % 1) * 60)).padStart(2, '0')}`
+          
+          // Generate breaks (0-3 breaks per day)
+          breakCount = Math.floor(Math.random() * 4) // 0-3 breaks
+          let totalBreakMinutes = 0
+          
+          for (let b = 0; b < breakCount; b++) {
+            const breakStart = baseCheckIn + 2 + (b * 2) + Math.random() * 1 // Spread breaks throughout day
+            const breakDuration = 15 + Math.random() * 45 // 15-60 minutes
+            const breakEnd = breakStart + (breakDuration / 60)
+            
+            const startTime = `${Math.floor(breakStart)}:${String(Math.floor((breakStart % 1) * 60)).padStart(2, '0')}`
+            const endTime = `${Math.floor(breakEnd)}:${String(Math.floor((breakEnd % 1) * 60)).padStart(2, '0')}`
+            const duration = `${Math.floor(breakDuration / 60)}:${String(Math.floor(breakDuration % 60)).padStart(2, '0')}`
+            
+            breaks.push({
+              start: startTime,
+              end: endTime,
+              duration: duration
+            })
+            
+            totalBreakMinutes += breakDuration
+          }
+          
+          // Calculate total break time
+          const breakHours = Math.floor(totalBreakMinutes / 60)
+          const breakMins = Math.floor(totalBreakMinutes % 60)
+          totalBreakTime = `${breakHours}:${String(breakMins).padStart(2, '0')}`
+          
+          // Calculate net working hours (total - breaks)
+          const netHours = workHours - (totalBreakMinutes / 60)
+          netWorkingHours = `${Math.floor(netHours)}:${String(Math.floor((netHours % 1) * 60)).padStart(2, '0')}`
           
           if (workHours < 4) {
             status = 'Half Day'
@@ -83,6 +129,10 @@ const HistoryPage = () => {
           checkIn,
           checkOut,
           workingHours,
+          totalBreakTime,
+          netWorkingHours,
+          breakCount,
+          breaks,
           status
         })
       }
@@ -145,8 +195,19 @@ const HistoryPage = () => {
 
   const stats = calculateStats()
 
+  const toggleExpanded = (date: string) => {
+    const newExpanded = new Set(expandedItems)
+    if (newExpanded.has(date)) {
+      newExpanded.delete(date)
+    } else {
+      newExpanded.add(date)
+    }
+    setExpandedItems(newExpanded)
+  }
+
   const renderAttendanceItem = ({ item }: { item: AttendanceDay }) => {
     const statusColors = getStatusColor(item.status)
+    const isExpanded = expandedItems.has(item.date)
     
     return (
       <View className="bg-white rounded-xl p-4 mb-3 shadow-sm border border-gray-100">
@@ -159,29 +220,80 @@ const HistoryPage = () => {
           </View>
         </View>
       
-      <View className="flex-row justify-between">
-        <View className="flex-1">
-          <Text className="text-sm text-gray-600 mb-1">Check In</Text>
-          <Text className="text-base font-medium text-gray-800">
-            {item.checkIn || '--:--'}
-          </Text>
+        <View className="flex-row justify-between mb-3">
+          <View className="flex-1">
+            <Text className="text-sm text-gray-600 mb-1">Check In</Text>
+            <Text className="text-base font-medium text-gray-800">
+              {item.checkIn || '--:--'}
+            </Text>
+          </View>
+          
+          <View className="flex-1">
+            <Text className="text-sm text-gray-600 mb-1">Check Out</Text>
+            <Text className="text-base font-medium text-gray-800">
+              {item.checkOut || '--:--'}
+            </Text>
+          </View>
+          
+          <View className="flex-1">
+            <Text className="text-sm text-gray-600 mb-1">Total Hours</Text>
+            <Text className="text-base font-medium text-gray-800">
+              {item.workingHours}
+            </Text>
+          </View>
         </View>
-        
-        <View className="flex-1">
-          <Text className="text-sm text-gray-600 mb-1">Check Out</Text>
-          <Text className="text-base font-medium text-gray-800">
-            {item.checkOut || '--:--'}
-          </Text>
+
+        {/* Break Summary Row */}
+        <View className="flex-row justify-between items-center mb-3 bg-gray-50 rounded-lg p-3">
+          <View className="flex-1">
+            <Text className="text-sm text-gray-600 mb-1">Breaks</Text>
+            <Text className="text-base font-medium text-gray-800">
+              {item.breakCount} ({item.totalBreakTime})
+            </Text>
+          </View>
+          
+          <View className="flex-1">
+            <Text className="text-sm text-gray-600 mb-1">Net Working</Text>
+            <Text className="text-base font-medium text-green-600">
+              {item.netWorkingHours}
+            </Text>
+          </View>
+
+          {item.breakCount > 0 && (
+            <TouchableOpacity 
+              onPress={() => toggleExpanded(item.date)}
+              className="px-3 py-1 bg-blue-100 rounded-full"
+            >
+              <Text className="text-blue-600 text-xs font-medium">
+                {isExpanded ? '▲ Hide' : '▼ Details'}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
-        
-        <View className="flex-1">
-          <Text className="text-sm text-gray-600 mb-1">Hours</Text>
-          <Text className="text-base font-medium text-gray-800">
-            {item.workingHours}
-          </Text>
-        </View>
+
+        {/* Expandable Break Details */}
+        {isExpanded && item.breaks.length > 0 && (
+          <View className="border-t border-gray-200 pt-3">
+            <Text className="text-sm font-medium text-gray-700 mb-2">Break Details:</Text>
+            {item.breaks.map((breakItem, index) => (
+              <View key={index} className="flex-row justify-between items-center py-2 px-3 bg-yellow-50 rounded-lg mb-2">
+                <View className="flex-1">
+                  <Text className="text-xs text-gray-600">Break {index + 1}</Text>
+                  <Text className="text-sm font-medium text-gray-800">
+                    {breakItem.start} - {breakItem.end}
+                  </Text>
+                </View>
+                <View className="items-end">
+                  <Text className="text-xs text-gray-600">Duration</Text>
+                  <Text className="text-sm font-medium text-orange-600">
+                    {breakItem.duration}
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
       </View>
-    </View>
     )
   }
 

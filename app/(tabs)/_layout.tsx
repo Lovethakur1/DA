@@ -108,10 +108,12 @@ const TabsLayout = () => {
       <Tabs
         initialRouteName="attendance"
         screenOptions={{
+          
           tabBarShowLabel: false,
           tabBarActiveTintColor: BRAND,
           tabBarInactiveTintColor: "#6B7280",
           tabBarStyle: {
+          
             backgroundColor: 'white',
             borderTopWidth: 0,
             height: 80,

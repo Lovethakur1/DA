@@ -1,9 +1,9 @@
 import api, { handleApiError } from './http'
 
 // Helper to convert a file URI into a form-data compatible object for React Native
-import { Platform, Alert } from 'react-native'
-import * as ImageManipulator from 'expo-image-manipulator'
 import { getInfoAsync } from 'expo-file-system/legacy'
+import * as ImageManipulator from 'expo-image-manipulator'
+import { Alert, Platform } from 'react-native'
 
 // Try to compress/resize an image until it's under maxBytes (best-effort).
 async function ensureImageUnderSize(uri: string, maxKB = 100): Promise<string> {
@@ -143,7 +143,7 @@ export const checkIn = async ({ latitude, longitude, photoUri }: { latitude: num
     })
     
     console.log('✅ CheckIn successful:', res.data)
-    return res.data
+    return { success: true, data: res.data }
     
   } catch (error: any) {
     console.error('❌ API check-in error', {
@@ -154,13 +154,27 @@ export const checkIn = async ({ latitude, longitude, photoUri }: { latitude: num
       config: error?.config
     })
     
-    // Show a clear alert for unexpected errors (helps prevent silent app restarts)
-    try {
-      Alert.alert('Check-in failed', error?.message || 'Unable to check in')
-    } catch {
-      // ignore
+    // Handle specific backend error responses
+    if (error?.response?.data) {
+      const errorData = error.response.data
+      
+      // Handle "already checked in" error
+      if (errorData.non_field_errors && errorData.non_field_errors.includes('You have already checked in today.')) {
+        return { success: false, error: 'already_checked_in', message: 'You have already checked in today.' }
+      }
+      
+      // Handle other non_field_errors
+      if (errorData.non_field_errors && Array.isArray(errorData.non_field_errors)) {
+        return { success: false, error: 'validation_error', message: errorData.non_field_errors[0] }
+      }
+      
+      // Handle other error formats
+      if (errorData.message) {
+        return { success: false, error: 'api_error', message: errorData.message }
+      }
     }
-    await handleApiError(error, 'Unable to check in')
+    
+    // For network or other errors, still throw to be handled by the calling function
     throw error
   }
 }
@@ -168,9 +182,26 @@ export const checkIn = async ({ latitude, longitude, photoUri }: { latitude: num
 export const breakIn = async () => {
   try {
     const res = await api.post('/api/break-in/', {})
-    return res.data
+    return { success: true, data: res.data }
   } catch (error: any) {
-    await handleApiError(error, 'Unable to start break')
+    console.error('❌ API break-in error', error?.response?.data)
+    
+    // Handle specific backend error responses
+    if (error?.response?.data) {
+      const errorData = error.response.data
+      
+      // Handle "need to check in first" error
+      if (errorData.message === 'You need to check in first before taking a break.') {
+        return { success: false, error: 'not_checked_in', message: errorData.message }
+      }
+      
+      // Handle other error formats
+      if (errorData.message) {
+        return { success: false, error: 'api_error', message: errorData.message }
+      }
+    }
+    
+    // For network or other errors, still throw to be handled by the calling function
     throw error
   }
 }
@@ -178,9 +209,26 @@ export const breakIn = async () => {
 export const breakOut = async () => {
   try {
     const res = await api.put('/api/break-out/', {})
-    return res.data
+    return { success: true, data: res.data }
   } catch (error: any) {
-    await handleApiError(error, 'Unable to end break')
+    console.error('❌ API break-out error', error?.response?.data)
+    
+    // Handle specific backend error responses
+    if (error?.response?.data) {
+      const errorData = error.response.data
+      
+      // Handle "no active break" error
+      if (errorData.message === 'No active break found. Please start a break first.') {
+        return { success: false, error: 'no_active_break', message: errorData.message }
+      }
+      
+      // Handle other error formats
+      if (errorData.message) {
+        return { success: false, error: 'api_error', message: errorData.message }
+      }
+    }
+    
+    // For network or other errors, still throw to be handled by the calling function
     throw error
   }
 }
@@ -256,8 +304,8 @@ export const checkOut = async ({ latitude, longitude, photoUri }: { latitude: nu
       },
     })
     
-    console.log('✅ CheckOut successful:', res.data)
-    return res.data
+    console.log('✅ CheckOut successful:-', res.data)
+    return { success: true, data: res.data }
     
   } catch (error: any) {
     console.error('❌ API check-out error', {
@@ -267,7 +315,83 @@ export const checkOut = async ({ latitude, longitude, photoUri }: { latitude: nu
       message: error?.message,
       config: error?.config
     })
-    await handleApiError(error, 'Unable to check out')
+    
+    // Handle specific backend error responses
+    if (error?.response?.data) {
+      const errorData = error.response.data
+      
+      // Handle "already checked out" error
+      if (errorData.non_field_errors && errorData.non_field_errors.includes('You have already checked out today.')) {
+        return { success: false, error: 'already_checked_out', message: 'You have already checked out today.' }
+      }
+      
+      // Handle "need to check in first" error
+      if (errorData.non_field_errors && errorData.non_field_errors.includes('You need to check in first before checking out.')) {
+        return { success: false, error: 'not_checked_in', message: 'You need to check in first before checking out.' }
+      }
+      
+      // Handle other non_field_errors
+      if (errorData.non_field_errors && Array.isArray(errorData.non_field_errors)) {
+        return { success: false, error: 'validation_error', message: errorData.non_field_errors[0] }
+      }
+      
+      // Handle other error formats
+      if (errorData.message) {
+        return { success: false, error: 'api_error', message: errorData.message }
+      }
+    }
+    
+    // For network or other errors, still throw to be handled by the calling function
+    throw error
+  }
+}
+
+export const getTodayAttendanceStatus = async () => {
+  try {
+    console.log('=== Today Attendance Status API Call ===')
+    
+    const res = await api.get('/api/attendance-status/')
+    console.log('✅ Today Attendance Status successful:', res.data)
+    return res.data
+    
+  } catch (error: any) {
+    console.error('❌ API today attendance status error', {
+      status: error?.response?.status,
+      url: error?.config?.url,
+      data: error?.response?.data,
+      message: error?.message
+    })
+    await handleApiError(error, 'Unable to fetch today attendance status')
+    throw error
+  }
+}
+
+export const getAttendanceHistory = async (params: { 
+  period?: 'weekly' | 'monthly', 
+  start_date?: string, 
+  end_date?: string 
+} = {}) => {
+  try {
+    console.log('=== Attendance History API Call ===')
+    console.log('Parameters:', params)
+    
+    const query: any = {}
+    if (params.period) query.period = params.period
+    if (params.start_date) query.start_date = params.start_date
+    if (params.end_date) query.end_date = params.end_date
+    
+    const res = await api.get('/api/attendance-history/', { params: query })
+    console.log('✅ Attendance History successful:', res.data)
+    return res.data
+    
+  } catch (error: any) {
+    console.error('❌ API attendance history error', {
+      status: error?.response?.status,
+      url: error?.config?.url,
+      data: error?.response?.data,
+      message: error?.message
+    })
+    await handleApiError(error, 'Unable to fetch attendance history')
     throw error
   }
 }

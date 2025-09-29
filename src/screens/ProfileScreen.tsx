@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 const BRAND = "#289294";
 const BLACK = "#000000";
@@ -80,6 +81,7 @@ const formatDate = (value?: string) => {
 
 const ProfileScreen = () => {
   const auth = useAuth();
+  const insets = useSafeAreaInsets();
   const { user, logout, loading = false, error, refresh } = auth;
 
   const nameInitials = useMemo(() => {
@@ -91,7 +93,7 @@ const ProfileScreen = () => {
   }, [user?.full_name]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: WHITE }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: WHITE }} edges={["bottom"]}>
       <StatusBar barStyle="dark-content" backgroundColor={WHITE} />
 
       {/* Top bar */}
@@ -115,7 +117,7 @@ const ProfileScreen = () => {
       {/* Content */}
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ padding: 20 }}
+        contentContainerStyle={{ padding: 20, paddingBottom: 28 + insets.bottom }}
         refreshControl={
           <RefreshControl refreshing={!!loading} onRefresh={refresh} tintColor={BRAND} />
         }
@@ -272,6 +274,7 @@ const ProfileScreen = () => {
       <View
         style={{
           padding: 14,
+          paddingBottom: 14 + insets.bottom,
           borderTopWidth: 1,
           borderTopColor: "#F3F4F6",
           backgroundColor: WHITE,
@@ -292,7 +295,7 @@ const ProfileScreen = () => {
           </Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </SafeAreaView>
   );
 };
 
