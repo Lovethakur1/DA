@@ -3,7 +3,7 @@ import api, { handleApiError } from './http'
 // Helper to convert a file URI into a form-data compatible object for React Native
 import { getInfoAsync } from 'expo-file-system/legacy'
 import * as ImageManipulator from 'expo-image-manipulator'
-import { Alert, Platform } from 'react-native'
+import { Platform } from 'react-native'
 
 // Try to compress/resize an image until it's under maxBytes (best-effort).
 async function ensureImageUnderSize(uri: string, maxKB = 100): Promise<string> {
@@ -366,10 +366,32 @@ export const getTodayAttendanceStatus = async () => {
   }
 }
 
-export const getAttendanceHistory = async (params: { 
-  period?: 'weekly' | 'monthly', 
-  start_date?: string, 
-  end_date?: string 
+// Fetch current attendance status for the authenticated user from backend
+// Endpoint: GET /api/status/
+export const getStatus = async () => {
+  try {
+    console.log('=== GET /api/status/ Call ===')
+    const res = await api.get('/api/status/')
+    console.log('✅ /api/status/ successful:', res.data)
+    return res.data
+  } catch (error: any) {
+    console.error('❌ API /api/status/ error', {
+      status: error?.response?.status,
+      url: error?.config?.url,
+      data: error?.response?.data,
+      message: error?.message
+    })
+    await handleApiError(error, 'Unable to fetch attendance status')
+    throw error
+  }
+}
+
+export const getAttendanceHistory = async (params: {
+  period?: 'weekly' | 'monthly',
+  start_date?: string,
+  end_date?: string,
+  page?: number,
+  per_page?: number
 } = {}) => {
   try {
     console.log('=== Attendance History API Call ===')
@@ -379,9 +401,12 @@ export const getAttendanceHistory = async (params: {
     if (params.period) query.period = params.period
     if (params.start_date) query.start_date = params.start_date
     if (params.end_date) query.end_date = params.end_date
+    if (typeof params.page === 'number') query.page = params.page
+    if (typeof params.per_page === 'number') query.per_page = params.per_page
     
     const res = await api.get('/api/attendance-history/', { params: query })
     console.log('✅ Attendance History successful:', res.data)
+    // return the full response body so caller can read pagination if present
     return res.data
     
   } catch (error: any) {

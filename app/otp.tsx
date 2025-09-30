@@ -40,12 +40,18 @@ const OTP = () => {
   const handleSubmit = async () => {
     const otpString = otp.join('')
     if (otpString.length !== 6) {
-      Alert.alert('Error', 'Please enter all 6 digits')
+      Alert.alert(
+        '❌ Incomplete OTP',
+        'Please enter all 6 digits of the verification code.'
+      )
       return
     }
 
     if (!email) {
-      Alert.alert('Error', 'Missing email parameter')
+      Alert.alert(
+        '❌ Session Error',
+        'Your session has expired. Please go back and login again.'
+      )
       return
     }
 
@@ -54,14 +60,21 @@ const OTP = () => {
   await auth.verifyOtp(email, otpString)
   router.replace('/(tabs)/attendance')
     } catch (error: any) {
-      Alert.alert('Verification failed', error?.message || 'Please try again')
+      const errorMessage = error?.message || 'The code you entered is incorrect'
+      Alert.alert(
+        '❌ Verification Failed',
+        `Please check the code and try again, or request a new one.`
+      )
     } finally {
       setLoading(false)
     }
   }
 
   const handleResendOtp = () => {
-    Alert.alert('OTP Sent', 'A new OTP has been sent to your registered number')
+    Alert.alert(
+      '✅ Code Sent',
+      'A new 6-digit verification code has been sent to your registered mobile number. Please check your messages.'
+    )
     setOtp(['', '', '', '', '', ''])
     inputRefs.current[0]?.focus()
   }

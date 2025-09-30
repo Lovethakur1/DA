@@ -1,11 +1,17 @@
-import React, { useEffect, useState } from 'react'
+import { getAttendanceHistory } from '@/src/api/attendance'
+import React, { useEffect, useState, useCallback } from 'react'
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Text,
+  TextInput,
   TouchableOpacity,
-  View
+  View,
+  StyleSheet,
+  Platform
 } from 'react-native'
+import DateTimePicker from '@react-native-community/datetimepicker'
 
 interface BreakEntry {
   start: string
@@ -26,123 +32,124 @@ interface AttendanceDay {
 }
 
 const HistoryPage = () => {
-  const [selectedView, setSelectedView] = useState<'weekly' | 'monthly'>('weekly')
+  const [selectedView, setSelectedView] = useState<'weekly' | 'monthly' | 'custom'>('weekly')
   const [attendanceData, setAttendanceData] = useState<AttendanceDay[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
+  const [summary, setSummary] = useState<any | null>(null)
+  const [pagination, setPagination] = useState<any | null>(null)
+  const [page, setPage] = useState<number>(1)
+  const [perPage, setPerPage] = useState<number>(10)
+  const [startDate, setStartDate] = useState<string>('')
+  const [endDate, setEndDate] = useState<string>('')
+  
+  // Date picker states
+  const [showStartDatePicker, setShowStartDatePicker] = useState(false)
+  const [showEndDatePicker, setShowEndDatePicker] = useState(false)
+  const [tempStartDate, setTempStartDate] = useState<Date>(new Date())
+  const [tempEndDate, setTempEndDate] = useState<Date>(new Date())
 
-  // Dummy data generator
+  const handleViewChange = useCallback((view: 'weekly' | 'monthly' | 'custom') => {
+    // Use setTimeout to ensure state update happens outside of render cycle
+    setTimeout(() => {
+      setSelectedView(view)
+      setPage(1)
+    }, 0)
+  }, [])
+
+  const formatDateForDisplay = (date: Date) => {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+
+  const handleStartDateChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowStartDatePicker(false)
+    }
+    if (selectedDate) {
+      setTempStartDate(selectedDate)
+      setStartDate(formatDateForDisplay(selectedDate))
+      if (Platform.OS === 'android') {
+        setShowStartDatePicker(false)
+      }
+    }
+  }
+
+  const handleEndDateChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowEndDatePicker(false)
+    }
+    if (selectedDate) {
+      setTempEndDate(selectedDate)
+      setEndDate(formatDateForDisplay(selectedDate))
+      if (Platform.OS === 'android') {
+        setShowEndDatePicker(false)
+      }
+    }
+  }
+
   useEffect(() => {
-    const generateData = async () => {
+    const fetchHistory = async () => {
       setIsLoading(true)
       try {
-        // Add a small delay to show loading state
-        await new Promise(resolve => setTimeout(resolve, 100))
-        generateDummyData()
+        const params: any = {}
+        if (selectedView !== 'custom') params.period = selectedView
+        if (selectedView === 'monthly') {
+          params.page = page
+          params.per_page = perPage
+        }
+        if (selectedView === 'custom') {
+          if (!startDate || !endDate) {
+            setAttendanceData([])
+            setSummary(null)
+            setPagination(null)
+            setIsLoading(false)
+            return
+          }
+          params.start_date = startDate
+          params.end_date = endDate
+        }
+
+        const res: any = await getAttendanceHistory(params)
+        const payloadRoot = res ?? {}
+        const payload = payloadRoot.data ?? payloadRoot
+
+        setSummary(payload.summary ?? payload.data?.summary ?? null)
+
+        const rawRecords = payload.attendance_records ?? payload.data?.attendance_records ?? []
+
+        const records = Array.isArray(rawRecords)
+          ? rawRecords.map((rec: any) => ({
+              date: rec.date,
+              checkIn: rec.checkIn ?? rec.check_in ?? null,
+              checkOut: rec.checkOut ?? rec.check_out ?? null,
+              workingHours: rec.workingHours ?? rec.working_hours ?? '0:00',
+              totalBreakTime: rec.totalBreakTime ?? rec.total_break_time ?? '0:00',
+              netWorkingHours: rec.netWorkingHours ?? rec.net_working_hours ?? '0:00',
+              breakCount: rec.breakCount ?? rec.break_count ?? (Array.isArray(rec.breaks) ? rec.breaks.length : 0),
+              breaks: Array.isArray(rec.breaks) ? rec.breaks.map((b: any) => ({ start: b.start, end: b.end, duration: b.duration })) : [],
+              status: rec.status ?? 'Present'
+            }))
+          : []
+
+        setAttendanceData(records)
+
+        const paginationRoot = payloadRoot.pagination ?? payload.pagination ?? payload.data?.pagination ?? null
+        setPagination(paginationRoot)
+      } catch (error) {
+        console.error('Failed to fetch attendance history', error)
+        setAttendanceData([])
+        setSummary(null)
+        setPagination(null)
       } finally {
         setIsLoading(false)
       }
     }
-    generateData()
-  }, [selectedView])
 
-  const generateDummyData = () => {
-    try {
-      const data: AttendanceDay[] = []
-      const today = new Date()
-      const daysToShow = selectedView === 'weekly' ? 7 : 30
-      
-      for (let i = daysToShow - 1; i >= 0; i--) {
-        const date = new Date(today)
-        date.setDate(today.getDate() - i)
-        
-        // Skip weekends for dummy data
-        if (date.getDay() === 0 || date.getDay() === 6) {
-          continue
-        }
-        
-        // Generate random attendance data
-        const isPresent = Math.random() > 0.1 // 90% attendance rate
-        const isLate = Math.random() > 0.8 // 20% late rate
-        
-        let checkIn = null
-        let checkOut = null
-        let status: AttendanceDay['status'] = 'Absent'
-        let workingHours = '00:00'
-        let breaks: BreakEntry[] = []
-        let totalBreakTime = '00:00'
-        let netWorkingHours = '00:00'
-        let breakCount = 0
-        
-        if (isPresent) {
-          const baseCheckIn = isLate ? 9 + Math.random() * 2 : 9 + Math.random() * 0.5 // 9-11 AM if late, 9-9:30 if on time
-          const baseCheckOut = 17 + Math.random() * 2 // 5-7 PM
-          
-          checkIn = `${Math.floor(baseCheckIn)}:${String(Math.floor((baseCheckIn % 1) * 60)).padStart(2, '0')}`
-          checkOut = `${Math.floor(baseCheckOut)}:${String(Math.floor((baseCheckOut % 1) * 60)).padStart(2, '0')}`
-          
-          const workHours = baseCheckOut - baseCheckIn
-          workingHours = `${Math.floor(workHours)}:${String(Math.floor((workHours % 1) * 60)).padStart(2, '0')}`
-          
-          // Generate breaks (0-3 breaks per day)
-          breakCount = Math.floor(Math.random() * 4) // 0-3 breaks
-          let totalBreakMinutes = 0
-          
-          for (let b = 0; b < breakCount; b++) {
-            const breakStart = baseCheckIn + 2 + (b * 2) + Math.random() * 1 // Spread breaks throughout day
-            const breakDuration = 15 + Math.random() * 45 // 15-60 minutes
-            const breakEnd = breakStart + (breakDuration / 60)
-            
-            const startTime = `${Math.floor(breakStart)}:${String(Math.floor((breakStart % 1) * 60)).padStart(2, '0')}`
-            const endTime = `${Math.floor(breakEnd)}:${String(Math.floor((breakEnd % 1) * 60)).padStart(2, '0')}`
-            const duration = `${Math.floor(breakDuration / 60)}:${String(Math.floor(breakDuration % 60)).padStart(2, '0')}`
-            
-            breaks.push({
-              start: startTime,
-              end: endTime,
-              duration: duration
-            })
-            
-            totalBreakMinutes += breakDuration
-          }
-          
-          // Calculate total break time
-          const breakHours = Math.floor(totalBreakMinutes / 60)
-          const breakMins = Math.floor(totalBreakMinutes % 60)
-          totalBreakTime = `${breakHours}:${String(breakMins).padStart(2, '0')}`
-          
-          // Calculate net working hours (total - breaks)
-          const netHours = workHours - (totalBreakMinutes / 60)
-          netWorkingHours = `${Math.floor(netHours)}:${String(Math.floor((netHours % 1) * 60)).padStart(2, '0')}`
-          
-          if (workHours < 4) {
-            status = 'Half Day'
-          } else if (isLate) {
-            status = 'Late'
-          } else {
-            status = 'Present'
-          }
-        }
-        
-        data.push({
-          date: date.toISOString().split('T')[0],
-          checkIn,
-          checkOut,
-          workingHours,
-          totalBreakTime,
-          netWorkingHours,
-          breakCount,
-          breaks,
-          status
-        })
-      }
-      
-      setAttendanceData(data)
-    } catch (error) {
-      console.error('Error generating dummy data:', error)
-      setAttendanceData([])
-    }
-  }
+    fetchHistory()
+  }, [selectedView, page, perPage, startDate, endDate])
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -195,17 +202,19 @@ const HistoryPage = () => {
 
   const stats = calculateStats()
 
-  const toggleExpanded = (date: string) => {
-    const newExpanded = new Set(expandedItems)
-    if (newExpanded.has(date)) {
-      newExpanded.delete(date)
-    } else {
-      newExpanded.add(date)
-    }
-    setExpandedItems(newExpanded)
-  }
+  const toggleExpanded = useCallback((date: string) => {
+    setExpandedItems(prev => {
+      const newExpanded = new Set(prev)
+      if (newExpanded.has(date)) {
+        newExpanded.delete(date)
+      } else {
+        newExpanded.add(date)
+      }
+      return newExpanded
+    })
+  }, [])
 
-  const renderAttendanceItem = ({ item }: { item: AttendanceDay }) => {
+  const renderAttendanceItem = useCallback(({ item }: { item: AttendanceDay }) => {
     const statusColors = getStatusColor(item.status)
     const isExpanded = expandedItems.has(item.date)
     
@@ -295,7 +304,7 @@ const HistoryPage = () => {
         )}
       </View>
     )
-  }
+  }, [expandedItems, toggleExpanded])
 
   return (
     <View className="flex-1 bg-gray-50">
@@ -306,34 +315,217 @@ const HistoryPage = () => {
         </Text>
         
         {/* View Toggle */}
-        <View className="flex-row bg-gray-100 rounded-xl p-1">
+        <View style={{
+          flexDirection: 'row',
+          backgroundColor: '#F3F4F6',
+          borderRadius: 12,
+          padding: 4
+        }}>
           <TouchableOpacity
-            className={`flex-1 py-2 px-4 rounded-lg ${
-              selectedView === 'weekly' ? 'bg-white shadow-sm' : ''
-            }`}
-            onPress={() => setSelectedView('weekly')}
+            key="weekly-tab"
+            style={[
+              {
+                flex: 1,
+                paddingVertical: 8,
+                paddingHorizontal: 16,
+                borderRadius: 8,
+              },
+              selectedView === 'weekly' && {
+                backgroundColor: '#FFFFFF',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.1,
+                shadowRadius: 2,
+                elevation: 2,
+              }
+            ]}
+            onPress={() => handleViewChange('weekly')}
+            activeOpacity={0.7}
           >
-            <Text className={`text-center font-medium ${
-              selectedView === 'weekly' ? 'text-[#289294]' : 'text-gray-600'
-            }`}>
+            <Text style={{
+              textAlign: 'center',
+              fontWeight: '500',
+              color: selectedView === 'weekly' ? '#289294' : '#6B7280'
+            }}>
               Weekly
             </Text>
           </TouchableOpacity>
           
           <TouchableOpacity
-            className={`flex-1 py-2 px-4 rounded-lg ${
-              selectedView === 'monthly' ? 'bg-white shadow-sm' : ''
-            }`}
-            onPress={() => setSelectedView('monthly')}
+            key="monthly-tab"
+            style={[
+              {
+                flex: 1,
+                paddingVertical: 8,
+                paddingHorizontal: 16,
+                borderRadius: 8,
+              },
+              selectedView === 'monthly' && {
+                backgroundColor: '#FFFFFF',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.1,
+                shadowRadius: 2,
+                elevation: 2,
+              }
+            ]}
+            onPress={() => handleViewChange('monthly')}
+            activeOpacity={0.7}
           >
-            <Text className={`text-center font-medium ${
-              selectedView === 'monthly' ? 'text-[#289294]' : 'text-gray-600'
-            }`}>
+            <Text style={{
+              textAlign: 'center',
+              fontWeight: '500',
+              color: selectedView === 'monthly' ? '#289294' : '#6B7280'
+            }}>
               Monthly
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            key="custom-tab"
+            style={[
+              {
+                flex: 1,
+                paddingVertical: 8,
+                paddingHorizontal: 16,
+                borderRadius: 8,
+              },
+              selectedView === 'custom' && {
+                backgroundColor: '#FFFFFF',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.1,
+                shadowRadius: 2,
+                elevation: 2,
+              }
+            ]}
+            onPress={() => handleViewChange('custom')}
+            activeOpacity={0.7}
+          >
+            <Text style={{
+              textAlign: 'center',
+              fontWeight: '500',
+              color: selectedView === 'custom' ? '#289294' : '#6B7280'
+            }}>
+              Custom
             </Text>
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Custom Date Range Picker - Compact Layout */}
+      {selectedView === 'custom' && (
+        <View className="px-4 py-3 bg-white border-b border-gray-100">
+          {/* Date Selection Row */}
+          <View className="flex-row items-center mb-2">
+            {/* Start Date */}
+            <View className="flex-1 mr-2">
+              <Text className="text-xs text-gray-600 mb-1">From</Text>
+              <TouchableOpacity 
+                onPress={() => setShowStartDatePicker(true)}
+                className="bg-gray-50 p-2 rounded border border-gray-200 flex-row items-center justify-between"
+              >
+                <Text className="text-sm text-gray-800" numberOfLines={1}>
+                  {startDate || 'Start'}
+                </Text>
+                <Text className="text-lg">📅</Text>
+              </TouchableOpacity>
+            </View>
+            
+            {/* End Date */}
+            <View className="flex-1 ml-2">
+              <Text className="text-xs text-gray-600 mb-1">To</Text>
+              <TouchableOpacity 
+                onPress={() => setShowEndDatePicker(true)}
+                className="bg-gray-50 p-2 rounded border border-gray-200 flex-row items-center justify-between"
+              >
+                <Text className="text-sm text-gray-800" numberOfLines={1}>
+                  {endDate || 'End'}
+                </Text>
+                <Text className="text-lg">📅</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Fetch Button - Inline */}
+            <TouchableOpacity 
+              onPress={() => {
+                if (!startDate || !endDate) { 
+                  Alert.alert('Missing Dates', 'Please select both dates')
+                  return 
+                }
+                setPage(1)
+              }} 
+              className="bg-[#289294] px-4 py-3 rounded ml-2 self-end"
+              style={{ minWidth: 60 }}
+            >
+              <Text className="text-white text-center font-semibold text-sm">Go</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Date Pickers - Android shows modal, iOS shows inline */}
+          {showStartDatePicker && (
+            <View className="mt-2 bg-gray-50 rounded-lg p-2">
+              <DateTimePicker
+                value={tempStartDate}
+                mode="date"
+                display={Platform.OS === 'ios' ? 'compact' : 'default'}
+                onChange={handleStartDateChange}
+                maximumDate={new Date()}
+              />
+              {Platform.OS === 'ios' && (
+                <TouchableOpacity 
+                  onPress={() => setShowStartDatePicker(false)}
+                  className="bg-[#289294] px-3 py-1.5 rounded mt-2"
+                >
+                  <Text className="text-white text-center text-sm font-semibold">Done</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+          
+          {showEndDatePicker && (
+            <View className="mt-2 bg-gray-50 rounded-lg p-2">
+              <DateTimePicker
+                value={tempEndDate}
+                mode="date"
+                display={Platform.OS === 'ios' ? 'compact' : 'default'}
+                onChange={handleEndDateChange}
+                maximumDate={new Date()}
+                minimumDate={tempStartDate}
+              />
+              {Platform.OS === 'ios' && (
+                <TouchableOpacity 
+                  onPress={() => setShowEndDatePicker(false)}
+                  className="bg-[#289294] px-3 py-1.5 rounded mt-2"
+                >
+                  <Text className="text-white text-center text-sm font-semibold">Done</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+        </View>
+      )}
+
+      {selectedView === 'monthly' && (
+        <View className="px-6 py-3 bg-white border-b border-gray-100 flex-row items-center justify-between">
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <TouchableOpacity disabled={page <= 1} onPress={() => setPage(Math.max(1, page - 1))} className="px-3 py-2 mr-2 bg-gray-100 rounded">
+              <Text>Prev</Text>
+            </TouchableOpacity>
+            <Text className="mr-3">Page {page}{pagination ? ` of ${pagination.total_pages ?? pagination.last_page ?? pagination.totalPages ?? ''}` : ''}</Text>
+            <TouchableOpacity disabled={pagination ? page >= (pagination.total_pages ?? pagination.last_page ?? pagination.totalPages ?? Infinity) : false} onPress={() => setPage(page + 1)} className="px-3 py-2 bg-gray-100 rounded">
+              <Text>Next</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text className="mr-2">Per page:</Text>
+            <TouchableOpacity onPress={() => setPerPage(10)} className={`px-2 py-1 rounded ${perPage === 10 ? 'bg-green-100' : 'bg-gray-100'}`}><Text>10</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => setPerPage(25)} className={`px-2 py-1 ml-2 rounded ${perPage === 25 ? 'bg-green-100' : 'bg-gray-100'}`}><Text>25</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => setPerPage(50)} className={`px-2 py-1 ml-2 rounded ${perPage === 50 ? 'bg-green-100' : 'bg-gray-100'}`}><Text>50</Text></TouchableOpacity>
+          </View>
+        </View>
+      )}
 
       {/* Stats Section */}
       <View className="px-6 py-4">
@@ -343,28 +535,28 @@ const HistoryPage = () => {
           <View className="flex-row justify-between mb-3">
             <View className="items-center flex-1">
               <Text className="text-2xl font-bold" style={{ color: '#289294' }}>
-                {stats.attendancePercentage}%
+                {summary ? `${summary.attendance_percentage ?? summary.attendancePercentage ?? 0}%` : `${stats.attendancePercentage}%`}
               </Text>
               <Text className="text-xs text-gray-600">Attendance</Text>
             </View>
             
             <View className="items-center flex-1">
               <Text className="text-2xl font-bold text-green-600">
-                {stats.presentDays}
+                {summary ? summary.present_days ?? summary.presentDays ?? stats.presentDays : stats.presentDays}
               </Text>
               <Text className="text-xs text-gray-600">Present</Text>
             </View>
             
             <View className="items-center flex-1">
               <Text className="text-2xl font-bold text-orange-600">
-                {stats.lateDays}
+                {summary ? summary.late_days ?? summary.lateDays ?? stats.lateDays : stats.lateDays}
               </Text>
               <Text className="text-xs text-gray-600">Late</Text>
             </View>
             
             <View className="items-center flex-1">
               <Text className="text-2xl font-bold text-yellow-600">
-                {stats.halfDays}
+                {summary ? summary.half_days ?? summary.halfDays ?? stats.halfDays : stats.halfDays}
               </Text>
               <Text className="text-xs text-gray-600">Half Day</Text>
             </View>
@@ -389,7 +581,7 @@ const HistoryPage = () => {
             renderItem={renderAttendanceItem}
             keyExtractor={(item) => item.date}
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: 100 }}
+            contentContainerStyle={{ paddingBottom: Platform.OS === 'ios' ? 120 : 100 }}
             removeClippedSubviews={true}
             maxToRenderPerBatch={10}
             initialNumToRender={7}

@@ -30,7 +30,7 @@ const Login = () => {
 
   const handleSubmit = async () => {
     if (!userId.trim() || !password.trim()) {
-      alert('Please fill in all fields')
+      alert('❌ Missing Information\n\nPlease enter both your User ID and Password to continue.')
       return
     }
 
@@ -39,7 +39,8 @@ const Login = () => {
       await auth.loginWithOtp(userId.trim(), password)
       router.push({ pathname: '/otp', params: { email: userId.trim() } })
     } catch (error: any) {
-      alert(error?.message || 'Failed to request OTP')
+      const errorMessage = error?.message || 'Unable to send OTP'
+      alert(`❌ Login Failed Please check your credentials and try again.`)
     } finally {
       setIsSubmitting(false)
     }
@@ -132,12 +133,12 @@ const Login = () => {
                   <Text className="text-xs"> </Text>
                 </View>
                 <TouchableOpacity
-                  onPress={() => router.push('/forgot-password')}
+                  // onPress={() => router.push('/forgot-password')}
                   accessibilityRole="button"
                 >
-                  <Text className="text-xs font-medium" style={{ color: BRAND }}>
+                  {/* <Text className="text-xs font-medium" style={{ color: BRAND }}>
                     Forgot password?
-                  </Text>
+                  </Text> */}
                 </TouchableOpacity>
               </View>
 
@@ -166,14 +167,14 @@ const Login = () => {
             </View>
 
             {/* Footer */}
-            <View className="items-center">
+            {/* <View className="items-center">
               <Text className="text-sm text-gray-600 text-center">
                 Don&apos;t have an account?{' '}
                 <Text className="font-semibold" style={{ color: BRAND }}>
                   Contact Support
                 </Text>
               </Text>
-            </View>
+            </View> */}
           </View>
 
           {/* Subtle helper text */}

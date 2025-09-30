@@ -19,6 +19,7 @@ interface CustomAlertProps {
     text: string
     onPress: () => void
     style?: 'default' | 'cancel' | 'destructive'
+    disabled?: boolean
   }>
   /** If true, tapping the dimmed backdrop closes the alert. */
   dismissOnBackdropPress?: boolean
@@ -139,6 +140,7 @@ const CustomAlert: React.FC<CustomAlertProps> = ({
               <View style={styles.buttonContainer}>
                 {buttons.map((button, index) => {
                   const buttonStyles = getButtonStyle(button.style)
+                  const isDisabled = button.disabled || false
                   return (
                     <Pressable
                       key={`${button.text}-${index}` }
@@ -146,14 +148,22 @@ const CustomAlert: React.FC<CustomAlertProps> = ({
                         styles.button,
                         { backgroundColor: buttonStyles.backgroundColor },
                         buttons.length > 1 && index > 0 && styles.buttonMargin,
+                        isDisabled && styles.buttonDisabled
                       ]}
                       android_ripple={{ borderless: false }}
                       onPress={() => {
                         // Run button handler first; caller decides whether to keep open or call onClose.
-                        button.onPress()
+                        if (!isDisabled) {
+                          button.onPress()
+                        }
                       }}
+                      disabled={isDisabled}
                     >
-                      <Text style={[styles.buttonText, { color: buttonStyles.textColor }]}>
+                      <Text style={[
+                        styles.buttonText, 
+                        { color: buttonStyles.textColor },
+                        isDisabled && styles.buttonTextDisabled
+                      ]}>
                         {button.text}
                       </Text>
                     </Pressable>
@@ -233,6 +243,12 @@ const styles = StyleSheet.create({
   buttonText: {
     fontSize: 16,
     fontWeight: '600',
+  },
+  buttonDisabled: {
+    opacity: 0.4,
+  },
+  buttonTextDisabled: {
+    opacity: 0.6,
   },
 })
 

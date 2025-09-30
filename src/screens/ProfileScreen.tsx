@@ -148,7 +148,7 @@ const ProfileScreen = () => {
                 {user?.email || "—"}
               </Text>
 
-              <View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>
+              {/* <View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>
                 <Badge
                   label={user?.is_staff ? "Staff" : "Non-Staff"}
                   tone={user?.is_staff ? "success" : "muted"}
@@ -157,7 +157,7 @@ const ProfileScreen = () => {
                   label={user?.is_superuser ? "Superuser" : "Standard"}
                   tone={user?.is_superuser ? "success" : "muted"}
                 />
-              </View>
+              </View> */}
             </View>
 
             {/* Edit / Refresh */}
@@ -271,7 +271,7 @@ const ProfileScreen = () => {
       </ScrollView>
 
       {/* Sticky footer CTA (optional) */}
-      <View
+      {/* <View
         style={{
           padding: 14,
           paddingBottom: 14 + insets.bottom,
@@ -294,7 +294,7 @@ const ProfileScreen = () => {
             Update Profile
           </Text>
         </TouchableOpacity>
-      </View>
+      </View> */}
     </SafeAreaView>
   );
 };

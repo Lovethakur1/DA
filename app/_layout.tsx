@@ -1,14 +1,17 @@
 import { AuthProvider } from '@/src/auth/AuthContext';
+// import { NavigationContainer } from '@react-navigation/native';
 import { Stack } from "expo-router";
 import React from 'react';
 import { View } from 'react-native';
 import "./global.css";
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function RootLayout() {
   return (
     <AuthProvider>
-      <View style={{ flex: 1,backgroundColor: "black" }}>
-        <Stack>
+      {/* <NavigationContainer> */}
+        <SafeAreaView style={{ flex: 1 }}>
+          <Stack>
           <Stack.Screen 
             name="index" 
             options={{
@@ -40,8 +43,9 @@ export default function RootLayout() {
             name="onboarding" 
             options={{headerShown: false}}
           />
-        </Stack>
-      </View>
+          </Stack>
+        </SafeAreaView>
+      {/* </NavigationContainer> */}
     </AuthProvider>
   );
 }

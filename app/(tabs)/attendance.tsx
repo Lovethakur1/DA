@@ -1,15 +1,18 @@
+import { useAuth } from '@/src/auth/AuthContext'
 import CustomAlert from '@/src/components/CustomAlert'
 import TimerDisplay from '@/src/components/TimerDisplay'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as ImagePicker from 'expo-image-picker'
 import * as Location from 'expo-location'
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import {
   Alert,
   ScrollView,
   Text,
   TouchableOpacity,
-  View
+  View,
+  Dimensions,
+  Platform
 } from 'react-native'
 
 interface BreakEntry {
@@ -40,11 +43,42 @@ interface PersistedAttendanceState {
   lastResetDate: string // ISO date string
 }
 
+// Responsive utility functions
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
+const isSmallDevice = SCREEN_WIDTH < 375
+const isMediumDevice = SCREEN_WIDTH >= 375 && SCREEN_WIDTH < 414
+const isLargeDevice = SCREEN_WIDTH >= 414
+
+// Responsive sizing
+const getResponsiveSize = (small: number, medium: number, large: number) => {
+  if (isSmallDevice) return small
+  if (isMediumDevice) return medium
+  return large
+}
+
+const getResponsivePadding = () => ({
+  horizontal: getResponsiveSize(16, 20, 24),
+  vertical: getResponsiveSize(12, 16, 20)
+})
+
+const getButtonPadding = () => ({
+  horizontal: getResponsiveSize(16, 20, 24),
+  vertical: getResponsiveSize(12, 14, 16)
+})
+
+const getFontSize = (base: number) => {
+  const scale = isSmallDevice ? 0.9 : isMediumDevice ? 1 : 1.1
+  return base * scale
+}
+
 const AttendancePage = () => {
   const [isCheckedIn, setIsCheckedIn] = useState(false)
   const [isOnBreak, setIsOnBreak] = useState(false)
-  const [breakElapsed, setBreakElapsed] = useState(0)
-  const [elapsedTime, setElapsedTime] = useState(0)
+  // these state values are updated (timers) but referenced by child components indirectly
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_breakElapsed, setBreakElapsed] = useState(0)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_elapsedTime, setElapsedTime] = useState(0)
   const [attendanceRecord, setAttendanceRecord] = useState<AttendanceRecord>({
     checkInTime: null,
     checkOutTime: null,
@@ -62,13 +96,19 @@ const AttendancePage = () => {
   // Track current break start for elapsed calculation
   const [currentBreakStart, setCurrentBreakStart] = useState<Date | null>(null)
   
+  // Countdown state for checkout confirmation
+  const [checkoutCountdown, setCheckoutCountdown] = useState<number | null>(null)
+  
+  // Track if checkout process is active (to disable break button)
+  const [checkoutInProgress, setCheckoutInProgress] = useState(false)
+  
   // Custom alert state
   const [alertConfig, setAlertConfig] = useState({
     visible: false,
     title: '',
     message: '',
     type: 'info' as 'success' | 'error' | 'warning' | 'info',
-    buttons: [] as Array<{ text: string; onPress: () => void; style?: 'default' | 'cancel' | 'destructive' }>
+    buttons: [] as { text: string; onPress: () => void; style?: 'default' | 'cancel' | 'destructive'; disabled?: boolean }[]
   })
 
   // Storage keys
@@ -116,41 +156,7 @@ const AttendancePage = () => {
     }
   }
 
-  // Load attendance state from AsyncStorage
-  const loadAttendanceState = async (): Promise<PersistedAttendanceState> => {
-    try {
-      const stored = await AsyncStorage.getItem(ATTENDANCE_STATE_KEY)
-      if (stored) {
-        const parsed = JSON.parse(stored)
-        
-        // Check if we need to reset for the day
-        if (shouldResetToday(parsed.lastResetDate)) {
-          console.log('Resetting attendance state for new day')
-          const resetState = getDefaultState()
-          await AsyncStorage.setItem(ATTENDANCE_STATE_KEY, JSON.stringify(resetState))
-          return resetState
-        }
-        
-        // Convert ISO strings back to Date objects
-        return {
-          ...parsed,
-          attendanceRecord: {
-            ...parsed.attendanceRecord,
-            checkInTime: parsed.attendanceRecord.checkInTime ? new Date(parsed.attendanceRecord.checkInTime) : null,
-            checkOutTime: parsed.attendanceRecord.checkOutTime ? new Date(parsed.attendanceRecord.checkOutTime) : null,
-            breaks: parsed.attendanceRecord.breaks?.map((b: any) => ({
-              ...b,
-              start: new Date(b.start),
-              end: b.end ? new Date(b.end) : null
-            })) || []
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error loading attendance state:', error)
-    }
-    return getDefaultState()
-  }
+  
 
   // Get default state
   const getDefaultState = (): PersistedAttendanceState => ({
@@ -194,26 +200,63 @@ const AttendancePage = () => {
   }, [])
 
   // Load persisted attendance state on app startup
+  // Load persisted attendance state on app startup
+  const loadAttendanceState = useCallback(async (): Promise<PersistedAttendanceState> => {
+    try {
+      const stored = await AsyncStorage.getItem(ATTENDANCE_STATE_KEY)
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        
+        // Check if we need to reset for the day
+        if (shouldResetToday(parsed.lastResetDate)) {
+          console.log('Resetting attendance state for new day')
+          const resetState = getDefaultState()
+          await AsyncStorage.setItem(ATTENDANCE_STATE_KEY, JSON.stringify(resetState))
+          return resetState
+        }
+        
+        // Convert ISO strings back to Date objects
+        return {
+          ...parsed,
+          attendanceRecord: {
+            ...parsed.attendanceRecord,
+            checkInTime: parsed.attendanceRecord.checkInTime ? new Date(parsed.attendanceRecord.checkInTime) : null,
+            checkOutTime: parsed.attendanceRecord.checkOutTime ? new Date(parsed.attendanceRecord.checkOutTime) : null,
+            breaks: parsed.attendanceRecord.breaks?.map((b: any) => ({
+              ...b,
+              start: new Date(b.start),
+              end: b.end ? new Date(b.end) : null
+            })) || []
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error loading attendance state:', error)
+    }
+    return getDefaultState()
+  }, [])
+
   useEffect(() => {
     const loadPersistedState = async () => {
       try {
         const persistedState = await loadAttendanceState()
         console.log('Loading persisted attendance state:', persistedState)
-        
+
         setIsCheckedIn(persistedState.isCheckedIn)
         setIsOnBreak(persistedState.isOnBreak)
         setAttendanceRecord(persistedState.attendanceRecord)
-        
+
         if (persistedState.currentBreakStart) {
           setCurrentBreakStart(new Date(persistedState.currentBreakStart))
         }
+
       } catch (error) {
         console.error('Error loading persisted state:', error)
       }
     }
-    
+
     loadPersistedState()
-  }, [])
+  }, [loadAttendanceState])
 
   // Timer to update elapsed times
   useEffect(() => {
@@ -280,6 +323,126 @@ const AttendancePage = () => {
     }
   }
 
+  // Consume attendance status from server (via AuthContext)
+  const { attendanceStatus, refreshAttendanceStatus } = useAuth()
+
+  // Refresh attendance status from server when app opens (only once on mount)
+  useEffect(() => {
+    const refreshOnMount = async () => {
+      try {
+        console.log('Refreshing attendance status from server on app open...')
+        await refreshAttendanceStatus()
+      } catch (error) {
+        console.warn('Failed to refresh attendance status on app open:', error)
+      }
+    }
+    refreshOnMount()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Merge server-provided attendance status into local UI state when available
+  useEffect(() => {
+    if (!attendanceStatus) return
+    try {
+      // Server may send camelCase (e.g. checkInTime) or snake_case (check_in_time).
+      const s = attendanceStatus as any
+      const status = s.status
+
+      const mapBreak = (b: any) => {
+        const startStr = b.breakIn ?? b.break_in ?? null
+        const endStr = b.breakOut ?? b.break_out ?? null
+        const durationSeconds = typeof b.durationSeconds === 'number' ? b.durationSeconds : (b.duration ? (() => { const parts = b.duration.split(':').map(Number); return parts[0]*3600 + parts[1]*60 + parts[2] })() : undefined)
+        return {
+          start: startStr ? new Date(startStr) : null,
+          end: endStr ? new Date(endStr) : null,
+          durationSeconds
+        }
+      }
+
+      const checkInStr = s.checkInTime ?? s.check_in_time ?? null
+      const checkOutStr = s.checkOutTime ?? s.check_out_time ?? null
+
+      const breaks = Array.isArray(s.breaks) ? s.breaks.map(mapBreak) : []
+
+      // Detect if user is currently on break by checking if last break has no end time
+      const hasActiveBreak = breaks.length > 0 && breaks[breaks.length - 1].end === null
+      const activeBreakStart = hasActiveBreak ? breaks[breaks.length - 1].start : null
+
+      const mergedRecord: any = {
+        checkInTime: checkInStr ? new Date(checkInStr) : null,
+        checkOutTime: checkOutStr ? new Date(checkOutStr) : null,
+        checkInLocation: s.additional?.location?.checkIn ?? s.check_in_location ?? null,
+        checkOutLocation: s.additional?.location?.checkOut ?? s.check_out_location ?? null,
+        checkInPhoto: s.additional?.photoUris?.checkIn ?? s.check_in_photo ?? null,
+        checkOutPhoto: s.additional?.photoUris?.checkOut ?? s.check_out_photo ?? null,
+        breaks
+      }
+
+      if (status === 'checkedin') {
+        setAttendanceRecord(mergedRecord)
+        setIsCheckedIn(true)
+        
+        // Check for active break from server data or detect from breaks array
+        const isOnBreakFromServer = s.isOnBreak ?? s.is_on_break ?? hasActiveBreak
+        setIsOnBreak(isOnBreakFromServer)
+        
+        // Set current break start time if on break
+        if (isOnBreakFromServer) {
+          const currentBreakStartStr = s.currentBreakStart ?? s.current_break_start ?? null
+          if (currentBreakStartStr) {
+            setCurrentBreakStart(new Date(currentBreakStartStr))
+          } else if (activeBreakStart) {
+            // Fallback to detected active break start from breaks array
+            setCurrentBreakStart(activeBreakStart)
+          }
+        } else {
+          setCurrentBreakStart(null)
+        }
+      } else if (status === 'checkedout') {
+        setAttendanceRecord(mergedRecord)
+        setIsCheckedIn(false)
+        setIsOnBreak(false)
+      } else {
+        // notchecking: clear in-memory checked-in flags but keep persisted record
+        setIsCheckedIn(false)
+        setIsOnBreak(false)
+      }
+
+      // Persist the mapped state into AsyncStorage so re-install/rehydrate can restore it quickly
+      try {
+        // Calculate isOnBreak state using same logic as above
+        const persistedIsOnBreak = s.isOnBreak ?? s.is_on_break ?? hasActiveBreak
+        
+        // Get currentBreakStart from server or from detected active break
+        let persistedBreakStart = s.currentBreakStart ?? s.current_break_start ?? null
+        if (!persistedBreakStart && activeBreakStart) {
+          persistedBreakStart = activeBreakStart.toISOString()
+        }
+        
+        const persisted = {
+          isCheckedIn: status === 'checkedin',
+          isOnBreak: persistedIsOnBreak,
+          attendanceRecord: {
+            checkInTime: mergedRecord.checkInTime ? mergedRecord.checkInTime.toISOString() : null,
+            checkOutTime: mergedRecord.checkOutTime ? mergedRecord.checkOutTime.toISOString() : null,
+            checkInLocation: mergedRecord.checkInLocation,
+            checkOutLocation: mergedRecord.checkOutLocation,
+            checkInPhoto: mergedRecord.checkInPhoto,
+            checkOutPhoto: mergedRecord.checkOutPhoto,
+            breaks: (mergedRecord.breaks || []).map((b: any) => ({ start: b.start ? b.start.toISOString() : null, end: b.end ? b.end.toISOString() : null, durationSeconds: b.durationSeconds }))
+          },
+          currentBreakStart: persistedBreakStart,
+          lastResetDate: s.date ? new Date(s.date).toISOString() : new Date().toISOString()
+        }
+        AsyncStorage.setItem(ATTENDANCE_STATE_KEY, JSON.stringify(persisted)).catch(e => console.warn('Failed to persist attendance state from server', e))
+      } catch (e) {
+        console.warn('Failed to persist attendance state from server', e)
+      }
+    } catch (e) {
+      console.warn('Failed to merge server attendance status into UI', e)
+    }
+  }, [attendanceStatus])
+
   const takePhoto = async () => {
     try {
       const result = await ImagePicker.launchCameraAsync({
@@ -298,7 +461,7 @@ const AttendancePage = () => {
     }
   }
 
-  const showAlert = (title: string, message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info', buttons?: Array<{ text: string; onPress: () => void; style?: 'default' | 'cancel' | 'destructive' }>) => {
+  const showAlert = (title: string, message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info', buttons?: { text: string; onPress: () => void; style?: 'default' | 'cancel' | 'destructive' }[]) => {
     const closeAlert = () => setAlertConfig(prev => ({ ...prev, visible: false }))
     
     const wrappedButtons = buttons?.map(button => ({
@@ -322,8 +485,8 @@ const AttendancePage = () => {
     // Pre-permission prompt (system will be used when requesting)
     const confirm = await new Promise<boolean>((res) => {
       showAlert(
-        'Check In Confirmation',
-        'We will request camera and location permissions. Continue?',
+        '📍 Permissions Required',
+        'To record your attendance, we need:\n\n• Camera - To capture your photo\n• Location - To verify your location\n\nDo you want to continue?',
         'info',
         [
           { text: 'Cancel', style: 'cancel', onPress: () => res(false) },
@@ -346,7 +509,7 @@ const AttendancePage = () => {
       const location = await getCurrentLocation()
       const photo = await takePhoto()
       if (!photo) {
-        showAlert('Error', 'Photo is required for check-in', 'error')
+        showAlert('📷 Photo Required', 'You need to take a photo to check in. Please try again and allow camera access.', 'error')
         setSubmittingCheckin(false)
         return
       }
@@ -388,22 +551,22 @@ const AttendancePage = () => {
                                 response.data?.msg || 
                                 'You have successfully checked in! Timer started.'
           
-          showAlert('Check-in Successful', successMessage, 'success')
+          showAlert('✅ Check-in Successful', successMessage + '\n\nYour work timer has started. Have a productive day!', 'success')
         } else {
           // Handle specific error cases
           if (response.error === 'already_checked_in') {
-            showAlert('Already Checked In', response.message, 'warning')
+            showAlert('⚠️ Already Checked In', response.message + '\n\nYou are already checked in for today. If this is incorrect, please contact support.', 'warning')
           } else {
-            showAlert('Check-in Failed', response.message || 'Unable to check in. Please try again.', 'error')
+            showAlert('❌ Check-in Failed', (response.message || 'Unable to complete check-in') + '\n\nPlease try again. If the problem persists, contact support.', 'error')
           }
         }
       } catch (apiError) {
         console.error('API check-in error', apiError)
-        showAlert('Network Error', 'Failed to connect to server. Please check your internet connection and try again.', 'error')
+        showAlert('🌐 Connection Error', 'Unable to connect to the server.\n\nPlease check:\n• Your internet connection\n• WiFi or mobile data is enabled\n\nThen try again.', 'error')
       }
 
     } catch (error) {
-      showAlert('Error', 'Failed to check in. Please try again.', 'error')
+      showAlert('❌ Check-in Error', 'Something went wrong during check-in.\n\nPlease ensure you have granted camera and location permissions, then try again.', 'error')
       console.error('Check-in error:', error)
     } finally {
       setSubmittingCheckin(false)
@@ -415,8 +578,8 @@ const AttendancePage = () => {
     if (isOnBreak) {
       const breakAction = await new Promise<'end_break' | 'cancel'>((res) => {
         showAlert(
-          'Active Break Detected',
-          'You are currently on a break. You must end your break before checking out.',
+          '⏸️ Break Still Active',
+          'You are currently on a break.\n\nYou need to end your break first before you can check out.\n\nWhat would you like to do?',
           'warning',
           [
             { text: 'Cancel', style: 'cancel', onPress: () => res('cancel') },
@@ -462,13 +625,13 @@ const AttendancePage = () => {
             
             console.log('Break automatically ended before checkout')
           } else {
-            showAlert('Break End Failed', 'Unable to end break. Please try ending your break manually first.', 'error')
+            showAlert('❌ Cannot End Break', 'Unable to automatically end your break.\n\nPlease click the "End Break" button first, then try checking out again.', 'error')
             setSubmittingBreak(false)
             return
           }
         } catch (breakError) {
           console.error('Auto break-out error:', breakError)
-          showAlert('Break End Failed', 'Failed to end break automatically. Please try ending your break manually first.', 'error')
+          showAlert('❌ Auto-End Failed', 'Could not automatically end your break.\n\nPlease manually click "End Break" button, then try checking out.', 'error')
           setSubmittingBreak(false)
           return
         } finally {
@@ -477,17 +640,83 @@ const AttendancePage = () => {
       }
     }
 
-    const confirm = await new Promise<boolean>((res) => {
-      showAlert(
-        'Check Out Confirmation',
-        'Are you sure you want to check out? This will stop your timer.',
-        'warning',
-        [
-          { text: 'Cancel', style: 'cancel', onPress: () => res(false) },
-          { text: 'Yes, Check Out', style: 'destructive', onPress: () => res(true) }
+    // Show countdown confirmation
+    setCheckoutInProgress(true) // Disable break button during checkout
+    const confirm = await new Promise<boolean>((resolve) => {
+      let countdown = 5
+      let countdownInterval: ReturnType<typeof setInterval> | null = null
+      let cancelled = false
+      let checkoutEnabled = false
+
+      const updateMessage = (seconds: number, enableCheckout: boolean = false) => {
+        if (cancelled) return
+        checkoutEnabled = enableCheckout
+        
+        const buttons: { text: string; onPress: () => void; style?: 'default' | 'cancel' | 'destructive'; disabled?: boolean }[] = [
+          { 
+            text: 'Cancel', 
+            style: 'cancel', 
+            onPress: () => {
+              cancelled = true
+              if (countdownInterval) clearInterval(countdownInterval)
+              setAlertConfig(prev => ({ ...prev, visible: false }))
+              setCheckoutInProgress(false) // Re-enable break button on cancel
+              resolve(false)
+            }
+          }
         ]
-      )
+
+        // Add "Check Out" button - disabled during countdown
+        if (enableCheckout) {
+          buttons.push({ 
+            text: `Check Out`, 
+            style: 'destructive', 
+            onPress: () => {
+              cancelled = true
+              if (countdownInterval) clearInterval(countdownInterval)
+              setAlertConfig(prev => ({ ...prev, visible: false }))
+              resolve(true)
+            },
+            disabled: false
+          })
+        } else {
+          buttons.push({ 
+            text: `Wait (${seconds}s)`, 
+            style: 'default', 
+            onPress: () => {}, // Disabled - does nothing
+            disabled: true
+          })
+        }
+
+        setAlertConfig({
+          visible: true,
+          title: 'Check Out Confirmation',
+          message: enableCheckout 
+            ? 'You can now check out. This will stop your timer.' 
+            : `Please wait ${seconds} seconds before checking out...`,
+          type: 'warning',
+          buttons
+        })
+      }
+
+      // Show initial message with disabled button
+      updateMessage(countdown, false)
+
+      // Start countdown
+      countdownInterval = setInterval(() => {
+        countdown--
+        if (countdown > 0) {
+          updateMessage(countdown, false)
+        } else {
+          // Countdown finished - enable checkout button
+          if (countdownInterval) clearInterval(countdownInterval)
+          if (!cancelled) {
+            updateMessage(0, true)
+          }
+        }
+      }, 1000)
     })
+    
     if (!confirm) return
 
     try {
@@ -502,7 +731,7 @@ const AttendancePage = () => {
       const location = await getCurrentLocation()
       const photo = await takePhoto()
       if (!photo) {
-        showAlert('Error', 'Photo is required for check-out', 'error')
+        showAlert('📷 Photo Required', 'You need to take a photo to check out.\n\nPlease try again and allow camera access.', 'error')
         setSubmittingCheckout(false)
         return
       }
@@ -535,27 +764,28 @@ const AttendancePage = () => {
                                 response.data?.msg || 
                                 'You have successfully checked out! Timer stopped.'
           
-          showAlert('Check-out Successful', successMessage, 'success')
+          showAlert('✅ Check-out Successful', successMessage + '\n\nYour work timer has stopped. Great job today!', 'success')
         } else {
           // Handle specific error cases
           if (response.error === 'already_checked_out') {
-            showAlert('Already Checked Out', response.message, 'warning')
+            showAlert('⚠️ Already Checked Out', response.message + '\n\nYou have already completed your check-out for today.', 'warning')
           } else if (response.error === 'not_checked_in') {
-            showAlert('Not Checked In', response.message, 'error')
+            showAlert('❌ Not Checked In', response.message + '\n\nYou need to check in first before you can check out.', 'error')
           } else {
-            showAlert('Check-out Failed', response.message || 'Unable to check out. Please try again.', 'error')
+            showAlert('❌ Check-out Failed', (response.message || 'Unable to complete check-out') + '\n\nPlease try again. If the problem continues, contact support.', 'error')
           }
         }
       } catch (apiError) {
         console.error('API check-out error', apiError)
-        showAlert('Network Error', 'Failed to connect to server. Please check your internet connection and try again.', 'error')
+        showAlert('🌐 Connection Error', 'Unable to connect to the server.\n\nPlease check:\n• Your internet connection\n• WiFi or mobile data is enabled\n\nThen try again.', 'error')
       }
 
     } catch (error) {
-      showAlert('Error', 'Failed to check out. Please try again.', 'error')
+      showAlert('❌ Check-out Error', 'Something went wrong during check-out.\n\nPlease ensure you have granted camera and location permissions, then try again.', 'error')
       console.error('Check-out error:', error)
     } finally {
       setSubmittingCheckout(false)
+      setCheckoutInProgress(false) // Re-enable break button after checkout completes
     }
   }
 
@@ -599,18 +829,18 @@ const AttendancePage = () => {
         })
 
         const message = response.data.message || 'Break timer started. Your work timer is now paused.'
-        showAlert('Break Started', message, 'info')
+        showAlert('☕ Break Started', message + '\n\nYour work timer is paused. Enjoy your break!', 'info')
       } else {
         // Handle specific error cases
         if (response.error === 'not_checked_in') {
-          showAlert('Cannot Start Break', response.message, 'error')
+          showAlert('❌ Cannot Start Break', response.message + '\n\nMake sure you are checked in before taking a break.', 'error')
         } else {
-          showAlert('Break Failed', response.message || 'Unable to start break. Please try again.', 'error')
+          showAlert('❌ Break Failed', (response.message || 'Unable to start your break') + '\n\nPlease try again or contact support if this continues.', 'error')
         }
       }
     } catch (apiError) {
       console.error('API break-in error', apiError)
-      showAlert('Network Error', 'Failed to connect to server. Please check your internet connection and try again.', 'error')
+      showAlert('🌐 Connection Error', 'Unable to connect to the server.\n\nPlease check:\n• Your internet connection\n• WiFi or mobile data is enabled\n\nThen try again.', 'error')
     } finally {
       setSubmittingBreak(false)
     }
@@ -667,18 +897,18 @@ const AttendancePage = () => {
 
         const backendDuration = response.data.duration || 'Unknown'
         const message = response.data.message || `Break ended. Duration: ${backendDuration}. Work timer resumed.`
-        showAlert('Break Ended', message, 'info')
+        showAlert('✅ Break Ended', message + '\n\nYour work timer has resumed. Welcome back!', 'info')
       } else {
         // Handle specific error cases
         if (response.error === 'no_active_break') {
-          showAlert('No Active Break', response.message, 'warning')
+          showAlert('⚠️ No Active Break', response.message + '\n\nYou don\'t have any active break to end.', 'warning')
         } else {
-          showAlert('End Break Failed', response.message || 'Unable to end break. Please try again.', 'error')
+          showAlert('❌ End Break Failed', (response.message || 'Unable to end your break') + '\n\nPlease try again. If it still fails, contact support.', 'error')
         }
       }
     } catch (apiError) {
       console.error('API break-out error', apiError)
-      showAlert('Network Error', 'Failed to connect to server. Please check your internet connection and try again.', 'error')
+      showAlert('🌐 Connection Error', 'Unable to connect to the server.\n\nPlease check:\n• Your internet connection\n• WiFi or mobile data is enabled\n\nThen try again.', 'error')
     } finally {
       setSubmittingBreak(false)
     }
@@ -694,7 +924,7 @@ const AttendancePage = () => {
   return (
     <View className="flex-1 bg-white">
       {/* Header */}
-      <View className="bg-white pt-12 pb-6 px-6 border-b border-gray-100">
+      <View className="bg-white pt-4 pb-6 px-6 border-b border-gray-100">
         <Text className="text-2xl font-bold text-center" style={{ color: '#289294' }}>
           Attendance
         </Text>
@@ -708,7 +938,11 @@ const AttendancePage = () => {
         </Text>
       </View>
  <ScrollView
-      contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 32 }}
+      contentContainerStyle={{ 
+        paddingHorizontal: 24, 
+        paddingVertical: 32,
+        paddingBottom: Platform.OS === 'ios' ? 120 : 100 
+      }}
       showsVerticalScrollIndicator={false}
     >
       <View className="flex-1 px-6 py-8">
@@ -725,13 +959,28 @@ const AttendancePage = () => {
 
         {/* Status Card */}
         <View className="bg-white rounded-2xl p-6 mb-6 shadow-sm border border-gray-100">
-          <View className="items-center">
+            <View className="items-center">
             <View 
               className={`w-4 h-4 rounded-full mb-3 ${isCheckedIn ? 'bg-green-500' : 'bg-gray-400'}`}
             />
             <Text className="text-lg font-semibold text-gray-800 mb-2">
               {isCheckedIn ? 'Checked In' : attendanceRecord.checkOutTime ? 'Checked Out' : 'Not Checked In'}
             </Text>
+            {/* Refresh server status button */}
+            <TouchableOpacity
+              className="mt-2 bg-gray-100 rounded-full px-3 py-1"
+              onPress={async () => {
+                try {
+                  await refreshAttendanceStatus()
+                  showAlert('✅ Status Refreshed', 'Your attendance status has been updated from the server.\n\nAll information is now current.', 'success')
+                } catch (e) {
+                  console.warn('refreshAttendanceStatus failed', e)
+                  showAlert('❌ Refresh Failed', 'Unable to update your attendance status.\n\nPlease check your internet connection and try again.', 'error')
+                }
+              }}
+            >
+              <Text className="text-xs text-gray-700">Refresh Status</Text>
+            </TouchableOpacity>
 
             {attendanceRecord.checkInTime && (
               <>
@@ -781,14 +1030,36 @@ const AttendancePage = () => {
   <>
     {/* Main Check In / Check Out button */}
     {isCheckedIn ? "" :  <TouchableOpacity
-      className={`rounded-2xl py-4 px-6 items-center shadow-lg ${submittingCheckin ? 'bg-gray-400' : 'bg-[#289294]'}`}
+      style={{
+        borderRadius: 16,
+        paddingVertical: getButtonPadding().vertical,
+        paddingHorizontal: getButtonPadding().horizontal,
+        alignItems: 'center',
+        backgroundColor: submittingCheckin ? '#9CA3AF' : '#289294',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+        elevation: 5,
+        minHeight: getResponsiveSize(56, 60, 64)
+      }}
       onPress={handleCheckIn}
       disabled={submittingCheckin}
+      activeOpacity={0.8}
     >
-      <Text className="text-white text-lg font-semibold">
+      <Text style={{
+        color: '#FFFFFF',
+        fontSize: getFontSize(18),
+        fontWeight: '600'
+      }}>
         {submittingCheckin ? '⏳ Checking In...' : '📥 Check In'}
       </Text>
-      <Text className="text-white text-sm mt-1 opacity-90">
+      <Text style={{
+        color: '#FFFFFF',
+        fontSize: getFontSize(14),
+        marginTop: 4,
+        opacity: 0.9
+      }}>
         {submittingCheckin ? 'Please wait...' : 'Start your work day'}
       </Text>
     </TouchableOpacity> }
@@ -796,37 +1067,102 @@ const AttendancePage = () => {
     {/* When checked in, show break buttons */}
     {isCheckedIn && 
     (
-      <View className="flex-row mt-4 w-full justify-between">
+      <View style={{
+        flexDirection: isSmallDevice ? 'column' : 'row',
+        marginTop: 16,
+        width: '100%',
+        gap: isSmallDevice ? 12 : 8
+      }}>
         {!isOnBreak ? (
           <TouchableOpacity
-            className={`flex-1 mr-2 rounded-2xl py-4 px-6 items-center shadow-lg ${submittingBreak ? 'bg-gray-400' : 'bg-[#289294]'}`}
+            style={{
+              flex: isSmallDevice ? undefined : 1,
+              width: isSmallDevice ? '100%' : undefined,
+              marginRight: isSmallDevice ? 0 : 8,
+              borderRadius: 16,
+              paddingVertical: getButtonPadding().vertical,
+              paddingHorizontal: getButtonPadding().horizontal,
+              alignItems: 'center',
+              backgroundColor: (submittingBreak || checkoutInProgress) ? '#9CA3AF' : '#289294',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.25,
+              shadowRadius: 3.84,
+              elevation: 5,
+              minHeight: getResponsiveSize(52, 56, 60)
+            }}
             onPress={handleBreakIn}
-            disabled={submittingBreak}
+            disabled={submittingBreak || checkoutInProgress}
+            activeOpacity={0.8}
           >
-            <Text className="text-white text-lg font-semibold">
-              {submittingBreak ? '⏳ Starting...' : '☕ Start Break'}
+            <Text style={{
+              color: '#FFFFFF',
+              fontSize: getFontSize(16),
+              fontWeight: '600'
+            }}>
+              {submittingBreak ? '⏳ Starting...' : checkoutInProgress ? '🚫 Wait...' : '☕ Start Break'}
             </Text>
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
-            className={`flex-1 mr-2 rounded-2xl py-4 px-6 items-center shadow-lg ${submittingBreak ? 'bg-gray-400' : 'bg-red-500'}`}
+            style={{
+              flex: isSmallDevice ? undefined : 1,
+              width: isSmallDevice ? '100%' : undefined,
+              marginRight: isSmallDevice ? 0 : 8,
+              borderRadius: 16,
+              paddingVertical: getButtonPadding().vertical,
+              paddingHorizontal: getButtonPadding().horizontal,
+              alignItems: 'center',
+              backgroundColor: submittingBreak ? '#9CA3AF' : '#EF4444',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.25,
+              shadowRadius: 3.84,
+              elevation: 5,
+              minHeight: getResponsiveSize(52, 56, 60)
+            }}
             onPress={handleBreakOff}
             disabled={submittingBreak}
+            activeOpacity={0.8}
           >
-            <Text className="text-white text-lg font-semibold">
+            <Text style={{
+              color: '#FFFFFF',
+              fontSize: getFontSize(16),
+              fontWeight: '600'
+            }}>
               {submittingBreak ? '⏳ Ending...' : '⏱ End Break'}
             </Text>
           </TouchableOpacity>
         )}
 
-        {/* Keep checkout button visible in same row if needed */}
+        {/* Keep checkout button visible */}
         <TouchableOpacity
-          className={`flex-1 ml-2 rounded-2xl py-4 px-6 items-center shadow-lg ${submittingCheckout ? 'bg-gray-400' : 'bg-red-400'}`}
+          style={{
+            flex: isSmallDevice ? undefined : 1,
+            width: isSmallDevice ? '100%' : undefined,
+            marginLeft: isSmallDevice ? 0 : 8,
+            borderRadius: 16,
+            paddingVertical: getButtonPadding().vertical,
+            paddingHorizontal: getButtonPadding().horizontal,
+            alignItems: 'center',
+            backgroundColor: submittingCheckout ? '#9CA3AF' : '#F87171',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.25,
+            shadowRadius: 3.84,
+            elevation: 5,
+            minHeight: getResponsiveSize(52, 56, 60)
+          }}
           onPress={handleCheckOut}
           disabled={submittingCheckout}
+          activeOpacity={0.8}
         >
-          <Text className="text-white text-lg font-semibold">
-            {submittingCheckout ? '⏳ Checking Out...' : '📤 Check Out'}
+          <Text style={{
+            color: '#FFFFFF',
+            fontSize: getFontSize(16),
+            fontWeight: '600'
+          }}>
+            {submittingCheckout ? 'Checking Out' : '📤 Check Out'}
           </Text>
         </TouchableOpacity>
       </View>
